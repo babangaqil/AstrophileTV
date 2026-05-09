@@ -55,7 +55,6 @@ public class OverlayService extends Service {
     // State
     private boolean isExpired = false;
     private String namaToko = "";
-    private String namaToko = "";
     private boolean isActive = false;
     private long startTime = 0;
     private long duration = 0;
@@ -348,7 +347,6 @@ public class OverlayService extends Service {
         TextView tvNamaTokoView = expiredView.findViewById(R.id.tvNamaToko);
         if (tvNamaTokoView != null) tvNamaTokoView.setText(namaToko.isEmpty() ? "ASTROPHILE" : namaToko.toUpperCase());
         TextView tvNamaTokoView = expiredView.findViewById(R.id.tvNamaToko);
-        if (tvNamaTokoView != null) tvNamaTokoView.setText(namaToko.isEmpty() ? "ASTROPHILE" : namaToko.toUpperCase());
         TextView tvName2  = expiredView.findViewById(R.id.tvExpiredName);
         TextView tvTv     = expiredView.findViewById(R.id.tvExpiredTV);
 
