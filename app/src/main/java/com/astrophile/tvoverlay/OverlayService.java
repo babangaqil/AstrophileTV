@@ -346,7 +346,6 @@ public class OverlayService extends Service {
 
         TextView tvNamaTokoView = expiredView.findViewById(R.id.tvNamaToko);
         if (tvNamaTokoView != null) tvNamaTokoView.setText(namaToko.isEmpty() ? "ASTROPHILE" : namaToko.toUpperCase());
-        TextView tvNamaTokoView = expiredView.findViewById(R.id.tvNamaToko);
         TextView tvName2  = expiredView.findViewById(R.id.tvExpiredName);
         TextView tvTv     = expiredView.findViewById(R.id.tvExpiredTV);
 
