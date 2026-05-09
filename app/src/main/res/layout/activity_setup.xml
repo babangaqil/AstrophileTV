@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#030508"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="8dp">
+
+        <!-- Logo -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ASTROPHILE"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="#00f5ff"
+            android:letterSpacing="0.2"
+            android:layout_marginBottom="4dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TV MONITOR · SETUP"
+            android:textSize="10sp"
+            android:textColor="#4060a0"
+            android:letterSpacing="0.3"
+            android:layout_marginBottom="32dp"/>
+
+        <!-- Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="24dp"
+            android:maxWidth="480dp">
+
+            <!-- API Key -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="API KEY FIREBASE"
+                android:textSize="9sp"
+                android:textColor="#5a80a8"
+                android:letterSpacing="0.2"
+                android:layout_marginBottom="6dp"/>
+
+            <EditText
+                android:id="@+id/etApiKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="AIzaSy..."
+                android:textColorHint="#3a5070"
+                android:textColor="#e8f4ff"
+                android:textSize="13sp"
+                android:background="@drawable/input_bg"
+                android:padding="12dp"
+                android:layout_marginBottom="14dp"
+                android:inputType="text"
+                android:singleLine="true"/>
+
+            <!-- Database URL -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="DATABASE URL"
+                android:textSize="9sp"
+                android:textColor="#5a80a8"
+                android:letterSpacing="0.2"
+                android:layout_marginBottom="6dp"/>
+
+            <EditText
+                android:id="@+id/etDbUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="https://project-default-rtdb.firebaseio.com"
+                android:textColorHint="#3a5070"
+                android:textColor="#e8f4ff"
+                android:textSize="12sp"
+                android:background="@drawable/input_bg"
+                android:padding="12dp"
+                android:layout_marginBottom="14dp"
+                android:inputType="textUri"
+                android:singleLine="true"/>
+
+            <!-- Project ID -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PROJECT ID"
+                android:textSize="9sp"
+                android:textColor="#5a80a8"
+                android:letterSpacing="0.2"
+                android:layout_marginBottom="6dp"/>
+
+            <EditText
+                android:id="@+id/etProjectId"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="nama-project"
+                android:textColorHint="#3a5070"
+                android:textColor="#e8f4ff"
+                android:textSize="13sp"
+                android:background="@drawable/input_bg"
+                android:padding="12dp"
+                android:layout_marginBottom="14dp"
+                android:inputType="text"
+                android:singleLine="true"/>
+
+            <!-- TV Number & Name Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginEnd="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="NOMOR TV INI"
+                        android:textSize="9sp"
+                        android:textColor="#5a80a8"
+                        android:letterSpacing="0.2"
+                        android:layout_marginBottom="6dp"/>
+
+                    <EditText
+                        android:id="@+id/etTvNum"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="1"
+                        android:textColorHint="#3a5070"
+                        android:textColor="#e8f4ff"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/input_bg"
+                        android:padding="12dp"
+                        android:gravity="center"
+                        android:inputType="number"
+                        android:singleLine="true"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="NAMA TV"
+                        android:textSize="9sp"
+                        android:textColor="#5a80a8"
+                        android:letterSpacing="0.2"
+                        android:layout_marginBottom="6dp"/>
+
+                    <EditText
+                        android:id="@+id/etTvName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="TV 1"
+                        android:textColorHint="#3a5070"
+                        android:textColor="#e8f4ff"
+                        android:textSize="14sp"
+                        android:background="@drawable/input_bg"
+                        android:padding="12dp"
+                        android:gravity="center"
+                        android:inputType="text"
+                        android:singleLine="true"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Connect Button -->
+            <Button
+                android:id="@+id/btnConnect"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="⚡  HUBUNGKAN &amp; MULAI MONITOR"
+                android:textColor="#00f5ff"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.15"
+                android:background="@drawable/btn_connect_bg"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- Status -->
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#00ff88"
+                android:gravity="center"
+                android:minHeight="20dp"/>
+
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Config tersimpan otomatis"
+            android:textSize="10sp"
+            android:textColor="#1a2a40"
+            android:layout_marginTop="16dp"/>
+
+    </LinearLayout>
+</ScrollView>

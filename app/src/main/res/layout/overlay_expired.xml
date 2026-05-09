@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F0030508">
+
+    <!-- Content Center -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="40dp">
+
+        <!-- Icon -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⏰"
+            android:textSize="80sp"
+            android:layout_marginBottom="24dp"/>
+
+        <!-- WAKTU HABIS -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="WAKTU HABIS"
+            android:textSize="56sp"
+            android:textStyle="bold"
+            android:textColor="#ff1a50"
+            android:letterSpacing="0.2"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- SESSION BERAKHIR -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SESSION BERAKHIR"
+            android:textSize="16sp"
+            android:textColor="#804060"
+            android:letterSpacing="0.4"
+            android:layout_marginBottom="32dp"/>
+
+        <!-- Nama Pelanggan -->
+        <TextView
+            android:id="@+id/tvExpiredName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:textColor="#ffffff"
+            android:letterSpacing="0.15"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Nama TV -->
+        <TextView
+            android:id="@+id/tvExpiredTV"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TV 1"
+            android:textSize="16sp"
+            android:textColor="#804060"
+            android:letterSpacing="0.3"
+            android:layout_marginBottom="48dp"/>
+
+        <!-- Call Kasir -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📞  HUBUNGI KASIR UNTUK TAMBAH WAKTU"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#ff6688"
+            android:letterSpacing="0.2"
+            android:background="@drawable/btn_expired_bg"
+            android:padding="16dp"
+            android:paddingStart="32dp"
+            android:paddingEnd="32dp"/>
+
+    </LinearLayout>
+
+    <!-- Corner RGB accents -->
+    <View
+        android:layout_width="60dp"
+        android:layout_height="3dp"
+        android:layout_gravity="top|start"
+        android:background="#00f5ff"/>
+    <View
+        android:layout_width="3dp"
+        android:layout_height="60dp"
+        android:layout_gravity="top|start"
+        android:background="#00f5ff"/>
+
+    <View
+        android:layout_width="60dp"
+        android:layout_height="3dp"
+        android:layout_gravity="top|end"
+        android:background="#ff00d4"/>
+    <View
+        android:layout_width="3dp"
+        android:layout_height="60dp"
+        android:layout_gravity="top|end"
+        android:background="#ff00d4"/>
+
+    <View
+        android:layout_width="60dp"
+        android:layout_height="3dp"
+        android:layout_gravity="bottom|start"
+        android:background="#ccff00"/>
+    <View
+        android:layout_width="3dp"
+        android:layout_height="60dp"
+        android:layout_gravity="bottom|start"
+        android:background="#ccff00"/>
+
+    <View
+        android:layout_width="60dp"
+        android:layout_height="3dp"
+        android:layout_gravity="bottom|end"
+        android:background="#7700ff"/>
+    <View
+        android:layout_width="3dp"
+        android:layout_height="60dp"
+        android:layout_gravity="bottom|end"
+        android:background="#7700ff"/>
+
+</FrameLayout>
