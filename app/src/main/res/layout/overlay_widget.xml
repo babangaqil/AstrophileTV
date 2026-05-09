@@ -4,57 +4,48 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="12dp">
-
+    android:padding="10dp">
     <FrameLayout
         android:id="@+id/widgetBg"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@drawable/widget_bg_normal"
-        android:padding="12dp">
-
+        android:padding="10dp">
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:layout_gravity="center">
-
-            <!-- Icon -->
             <TextView
                 android:id="@+id/tvWidgetIcon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="⏱"
-                android:textSize="22sp"
-                android:layout_marginEnd="10dp"/>
-
-            <!-- Time & Label -->
+                android:textSize="20sp"
+                android:layout_marginEnd="8dp"/>
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-
                 <TextView
                     android:id="@+id/tvWidgetTime"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="--:--"
-                    android:textSize="24sp"
+                    android:textSize="28sp"
                     android:textStyle="bold"
                     android:textColor="#00f5ff"
-                    android:letterSpacing="0.1"
+                    android:letterSpacing="0.08"
                     android:fontFamily="monospace"/>
-
                 <TextView
                     android:id="@+id/tvWidgetLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="SISA WAKTU"
-                    android:textSize="8sp"
+                    android:textSize="10sp"
                     android:textColor="#5a80a8"
                     android:letterSpacing="0.2"/>
-
             </LinearLayout>
         </LinearLayout>
     </FrameLayout>

@@ -54,6 +54,8 @@ public class OverlayService extends Service {
 
     // State
     private boolean isExpired = false;
+    private String namaToko = "";
+    private String namaToko = "";
     private boolean isActive = false;
     private long startTime = 0;
     private long duration = 0;
@@ -253,6 +255,7 @@ public class OverlayService extends Service {
 
     // ── WIDGET ─────────────────────────────────────────────────
     private void showWidget() {
+        // widget diatur di updateWidget
         widgetView.setVisibility(View.VISIBLE);
         updateWidget();
     }
@@ -284,25 +287,28 @@ public class OverlayService extends Service {
                 showExpired();
                 return;
             } else if (secs <= 60) {
+                widgetView.setVisibility(View.VISIBLE);
+                widgetView.setVisibility(View.VISIBLE);
                 // Bahaya — merah berkedip
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
                 if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
                 if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
                 if (!toast1Shown) {
-                    showToast("🚨", "SISA 1 MENIT!", "#ff1a50");
                     toast1Shown = true;
                 }
             } else if (secs <= 300) {
+                if (!toast5Shown) { widgetView.setVisibility(View.VISIBLE); mainHandler.postDelayed(() -> widgetView.setVisibility(View.GONE), 10000); }
+                if (!toast5Shown) { widgetView.setVisibility(View.VISIBLE); mainHandler.postDelayed(() -> widgetView.setVisibility(View.GONE), 10000); }
                 // Warning — kuning
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
                 if (tvLabel != null) tvLabel.setText("SISA WAKTU");
                 if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
                 if (!toast5Shown) {
-                    showToast("⚠️", "SISA 5 MENIT", "#ffcc00");
                     toast5Shown = true;
                 }
             } else {
-                // Normal — cyan
+                // Normal — widget disembunyikan
+                widgetView.setVisibility(View.GONE);
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#00f5ff"));
                 if (tvLabel != null) tvLabel.setText("SISA WAKTU");
                 if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_normal);
@@ -339,6 +345,10 @@ public class OverlayService extends Service {
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
 
+        TextView tvNamaTokoView = expiredView.findViewById(R.id.tvNamaToko);
+        if (tvNamaTokoView != null) tvNamaTokoView.setText(namaToko.isEmpty() ? "ASTROPHILE" : namaToko.toUpperCase());
+        TextView tvNamaTokoView = expiredView.findViewById(R.id.tvNamaToko);
+        if (tvNamaTokoView != null) tvNamaTokoView.setText(namaToko.isEmpty() ? "ASTROPHILE" : namaToko.toUpperCase());
         TextView tvName2  = expiredView.findViewById(R.id.tvExpiredName);
         TextView tvTv     = expiredView.findViewById(R.id.tvExpiredTV);
 
