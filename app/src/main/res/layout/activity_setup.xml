@@ -211,8 +211,6 @@
             android:textColor="#336688"
             android:gravity="center"
             android:visibility="gone"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
                 android:text=""
                 android:textSize="12sp"
                 android:textColor="#00ff88"
