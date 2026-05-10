@@ -1,7 +1,9 @@
 package com.astrophile.tvoverlay;
 
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -11,8 +13,10 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 public class SetupActivity extends AppCompatActivity {
 
@@ -23,21 +27,34 @@ public class SetupActivity extends AppCompatActivity {
     private Button btnConnect;
     private TextView tvStatus;
 
+    private final ActivityResultLauncher<String> notifPermLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            if (!granted) {
+                showStatus("Izin notifikasi ditolak - service tetap jalan", "#ffcc00");
+            }
+        });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Fullscreen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            getWindow().getAttributes().layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         );
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-            View.SYSTEM_UI_FLAG_FULLSCREEN |
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        );
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                View.SYSTEM_UI_FLAG_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            );
+        }
 
         setContentView(R.layout.activity_setup);
 
@@ -49,7 +66,6 @@ public class SetupActivity extends AppCompatActivity {
         btnConnect  = findViewById(R.id.btnConnect);
         tvStatus    = findViewById(R.id.tvStatus);
 
-        // Load saved config
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         etApiKey.setText(prefs.getString("apiKey", ""));
         etDbUrl.setText(prefs.getString("dbUrl", ""));
@@ -59,11 +75,21 @@ public class SetupActivity extends AppCompatActivity {
 
         btnConnect.setOnClickListener(v -> connectAndStart());
 
-        // Kalau sudah ada config → auto start service
+        requestNotificationPermission();
+
         if (!prefs.getString("apiKey", "").isEmpty()) {
             if (hasOverlayPermission()) {
                 startOverlayService();
-                showStatus("✅ Service berjalan di background", "#00ff88");
+                showStatus("Service berjalan di background", "#00ff88");
+            }
+        }
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
             }
         }
     }
@@ -76,11 +102,11 @@ public class SetupActivity extends AppCompatActivity {
         String tvName    = etTvName.getText().toString().trim();
 
         if (apiKey.isEmpty() || dbUrl.isEmpty() || projectId.isEmpty()) {
-            showStatus("⚠️ Semua field wajib diisi!", "#ffcc00");
+            showStatus("Semua field wajib diisi!", "#ffcc00");
             return;
         }
         if (!dbUrl.contains("firebaseio.com") && !dbUrl.contains("firebasedatabase.app")) {
-            showStatus("⚠️ Database URL tidak valid!", "#ffcc00");
+            showStatus("Database URL tidak valid!", "#ffcc00");
             return;
         }
 
@@ -88,7 +114,6 @@ public class SetupActivity extends AppCompatActivity {
         try { tvNum = Integer.parseInt(tvNumStr); } catch (Exception e) { tvNum = 1; }
         if (tvName.isEmpty()) tvName = "TV " + tvNum;
 
-        // Simpan config
         SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
         editor.putString("apiKey", apiKey);
         editor.putString("dbUrl", dbUrl);
@@ -97,13 +122,12 @@ public class SetupActivity extends AppCompatActivity {
         editor.putString("tvName", tvName);
         editor.apply();
 
-        // Cek permission overlay
         if (!hasOverlayPermission()) {
-            showStatus("⚠️ Butuh izin overlay. Aktifkan lalu kembali ke app.", "#ffcc00");
+            showStatus("Butuh izin overlay. Aktifkan lalu kembali.", "#ffcc00");
             requestOverlayPermission();
         } else {
             startOverlayService();
-            showStatus("✅ Terhubung! Service berjalan di background.", "#00ff88");
+            showStatus("Terhubung! Service berjalan.", "#00ff88");
         }
     }
 
@@ -135,7 +159,6 @@ public class SetupActivity extends AppCompatActivity {
 
     private void showStatus(String msg, String color) {
         tvStatus.setText(msg);
-        // Set color berdasarkan string hex
         try {
             tvStatus.setTextColor(android.graphics.Color.parseColor(color));
         } catch (Exception e) {
@@ -149,9 +172,9 @@ public class SetupActivity extends AppCompatActivity {
         if (requestCode == REQUEST_OVERLAY) {
             if (hasOverlayPermission()) {
                 startOverlayService();
-                showStatus("✅ Izin diberikan! Service berjalan.", "#00ff88");
+                showStatus("Izin diberikan! Service berjalan.", "#00ff88");
             } else {
-                showStatus("❌ Izin ditolak. Tidak bisa overlay.", "#ff4d6d");
+                showStatus("Izin ditolak. Tidak bisa overlay.", "#ff4d6d");
             }
         }
     }
