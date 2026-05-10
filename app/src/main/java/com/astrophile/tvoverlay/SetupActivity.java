@@ -28,106 +28,113 @@ public class SetupActivity extends AppCompatActivity {
     private TextView tvStatus;
 
     private final ActivityResultLauncher<String> notifPermLauncher =
-        registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
-            if (!granted) {
-                showStatus("Izin notifikasi ditolak - service tetap jalan", "#ffcc00");
-            }
-        });
+        registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {});
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        // Tangkap semua error dan tampilkan di layar
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            runOnUiThread(() -> {
+                try {
+                    TextView tv = new TextView(this);
+                    tv.setText("ERROR:\n" + throwable.getMessage() + "\n\n" + android.util.Log.getStackTraceString(throwable));
+                    tv.setTextColor(android.graphics.Color.RED);
+                    tv.setPadding(20, 20, 20, 20);
+                    setContentView(tv);
+                } catch (Exception e) {}
+            });
+        });
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            getWindow().getAttributes().layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        }
-        getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN
-        );
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        try {
+            super.onCreate(savedInstanceState);
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                getWindow().getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            }
+            getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN
             );
-        }
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        setContentView(R.layout.activity_setup);
+            setContentView(R.layout.activity_setup);
 
-        etApiKey    = findViewById(R.id.etApiKey);
-        etDbUrl     = findViewById(R.id.etDbUrl);
-        etProjectId = findViewById(R.id.etProjectId);
-        etTvNum     = findViewById(R.id.etTvNum);
-        etTvName    = findViewById(R.id.etTvName);
-        btnConnect  = findViewById(R.id.btnConnect);
-        tvStatus    = findViewById(R.id.tvStatus);
+            etApiKey    = findViewById(R.id.etApiKey);
+            etDbUrl     = findViewById(R.id.etDbUrl);
+            etProjectId = findViewById(R.id.etProjectId);
+            etTvNum     = findViewById(R.id.etTvNum);
+            etTvName    = findViewById(R.id.etTvName);
+            btnConnect  = findViewById(R.id.btnConnect);
+            tvStatus    = findViewById(R.id.tvStatus);
 
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        etApiKey.setText(prefs.getString("apiKey", ""));
-        etDbUrl.setText(prefs.getString("dbUrl", ""));
-        etProjectId.setText(prefs.getString("projectId", ""));
-        etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
-        etTvName.setText(prefs.getString("tvName", ""));
+            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+            etApiKey.setText(prefs.getString("apiKey", ""));
+            etDbUrl.setText(prefs.getString("dbUrl", ""));
+            etProjectId.setText(prefs.getString("projectId", ""));
+            etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
+            etTvName.setText(prefs.getString("tvName", ""));
 
-        btnConnect.setOnClickListener(v -> connectAndStart());
+            btnConnect.setOnClickListener(v -> connectAndStart());
 
-        requestNotificationPermission();
-
-        if (!prefs.getString("apiKey", "").isEmpty()) {
-            if (hasOverlayPermission()) {
-                startOverlayService();
-                showStatus("Service berjalan di background", "#00ff88");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+                }
             }
-        }
-    }
 
-    private void requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            if (!prefs.getString("apiKey", "").isEmpty()) {
+                if (hasOverlayPermission()) {
+                    startOverlayService();
+                    showStatus("Service berjalan di background", "#00ff88");
+                }
             }
+        } catch (Exception e) {
+            try {
+                TextView tv = new TextView(this);
+                tv.setText("CRASH di onCreate:\n" + e.getMessage() + "\n\n" + android.util.Log.getStackTraceString(e));
+                tv.setTextColor(android.graphics.Color.RED);
+                tv.setPadding(20, 20, 20, 20);
+                setContentView(tv);
+            } catch (Exception e2) {}
         }
     }
 
     private void connectAndStart() {
-        String apiKey    = etApiKey.getText().toString().trim();
-        String dbUrl     = etDbUrl.getText().toString().trim();
-        String projectId = etProjectId.getText().toString().trim();
-        String tvNumStr  = etTvNum.getText().toString().trim();
-        String tvName    = etTvName.getText().toString().trim();
+        try {
+            String apiKey    = etApiKey.getText().toString().trim();
+            String dbUrl     = etDbUrl.getText().toString().trim();
+            String projectId = etProjectId.getText().toString().trim();
+            String tvNumStr  = etTvNum.getText().toString().trim();
+            String tvName    = etTvName.getText().toString().trim();
 
-        if (apiKey.isEmpty() || dbUrl.isEmpty() || projectId.isEmpty()) {
-            showStatus("Semua field wajib diisi!", "#ffcc00");
-            return;
-        }
-        if (!dbUrl.contains("firebaseio.com") && !dbUrl.contains("firebasedatabase.app")) {
-            showStatus("Database URL tidak valid!", "#ffcc00");
-            return;
-        }
+            if (apiKey.isEmpty() || dbUrl.isEmpty() || projectId.isEmpty()) {
+                showStatus("Semua field wajib diisi!", "#ffcc00");
+                return;
+            }
 
-        int tvNum = 1;
-        try { tvNum = Integer.parseInt(tvNumStr); } catch (Exception e) { tvNum = 1; }
-        if (tvName.isEmpty()) tvName = "TV " + tvNum;
+            int tvNum = 1;
+            try { tvNum = Integer.parseInt(tvNumStr); } catch (Exception e) { tvNum = 1; }
+            if (tvName.isEmpty()) tvName = "TV " + tvNum;
 
-        SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
-        editor.putString("apiKey", apiKey);
-        editor.putString("dbUrl", dbUrl);
-        editor.putString("projectId", projectId);
-        editor.putInt("tvNum", tvNum);
-        editor.putString("tvName", tvName);
-        editor.apply();
+            SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
+            editor.putString("apiKey", apiKey);
+            editor.putString("dbUrl", dbUrl);
+            editor.putString("projectId", projectId);
+            editor.putInt("tvNum", tvNum);
+            editor.putString("tvName", tvName);
+            editor.apply();
 
-        if (!hasOverlayPermission()) {
-            showStatus("Butuh izin overlay. Aktifkan lalu kembali.", "#ffcc00");
-            requestOverlayPermission();
-        } else {
-            startOverlayService();
-            showStatus("Terhubung! Service berjalan.", "#00ff88");
+            if (!hasOverlayPermission()) {
+                showStatus("Butuh izin overlay. Aktifkan lalu kembali.", "#ffcc00");
+                requestOverlayPermission();
+            } else {
+                startOverlayService();
+                showStatus("Terhubung! Service berjalan.", "#00ff88");
+            }
+        } catch (Exception e) {
+            showStatus("Error: " + e.getMessage(), "#ff4d6d");
         }
     }
 
@@ -158,6 +165,7 @@ public class SetupActivity extends AppCompatActivity {
     }
 
     private void showStatus(String msg, String color) {
+        if (tvStatus == null) return;
         tvStatus.setText(msg);
         try {
             tvStatus.setTextColor(android.graphics.Color.parseColor(color));
