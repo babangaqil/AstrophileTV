@@ -8,6 +8,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -21,6 +24,9 @@ public class SetupActivity extends AppCompatActivity {
     private static final int REQUEST_OVERLAY = 1001;
     private static final String PREFS = "astro_tv_prefs";
 
+    private EditText etLicenseKey;
+    private Button btnActivate;
+    private TextView tvLicenseStatus;
     private EditText etApiKey, etDbUrl, etProjectId, etTvNum, etTvName;
     private Button btnConnect;
     private TextView tvStatus;
@@ -31,8 +37,95 @@ public class SetupActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_setup);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            }
+        }
+        if (LicenseManager.hasValidLicense(this)) {
+            showSetupScreen();
+            LicenseManager.checkRevoke(this, new LicenseManager.LicenseCallback() {
+                @Override public void onValid(String s, String d) {}
+                @Override public void onInvalid(String reason) {
+                    runOnUiThread(() -> { LicenseManager.clearLicense(SetupActivity.this); showLicenseScreen(reason); });
+                }
+                @Override public void onError(String m) {}
+            });
+        } else {
+            showLicenseScreen(null);
+        }
+    }
 
+    private void showLicenseScreen(String reason) {
+        setContentView(R.layout.activity_license);
+        etLicenseKey    = findViewById(R.id.etLicenseKey);
+        btnActivate     = findViewById(R.id.btnActivate);
+        tvLicenseStatus = findViewById(R.id.tvLicenseStatus);
+        if (reason != null) {
+            switch (reason) {
+                case "REVOKED":       setLicenseStatus("License toko dicabut. Hubungi developer.", "#ff4d6d"); break;
+                case "EXPIRED":       setLicenseStatus("License expired. Hubungi developer.", "#ffcc00"); break;
+                case "DEVICE_REVOKED":setLicenseStatus("Unit TV ini dinonaktifkan.", "#ff4d6d"); break;
+            }
+        }
+        etLicenseKey.addTextChangedListener(new TextWatcher() {
+            boolean fmt=false;
+            @Override public void beforeTextChanged(CharSequence s,int st,int c,int a){}
+            @Override public void onTextChanged(CharSequence s,int st,int b,int c){}
+            @Override public void afterTextChanged(Editable s) {
+                if(fmt) return; fmt=true;
+                String raw=s.toString().replace("-","").toUpperCase();
+                if(raw.length()>17) raw=raw.substring(0,17);
+                StringBuilder sb=new StringBuilder();
+                for(int i=0;i<raw.length();i++){ if(i==5||i==9||i==13) sb.append('-'); sb.append(raw.charAt(i)); }
+                etLicenseKey.setText(sb.toString()); etLicenseKey.setSelection(sb.length());
+                fmt=false;
+            }
+        });
+        btnActivate.setOnClickListener(v -> activateLicense());
+    }
+
+    private void activateLicense() {
+        String key = etLicenseKey.getText().toString().trim();
+        if (key.length() < 5) { setLicenseStatus("Masukkan license key yang valid", "#ffcc00"); return; }
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        int tvNum = prefs.getInt("tvNum", 1);
+        String tvName = prefs.getString("tvName", "TV " + tvNum);
+        btnActivate.setEnabled(false);
+        setLicenseStatus("Memverifikasi key...", "#00f5ff");
+        LicenseManager.verifyAndRegister(this, key, tvNum, tvName, new LicenseManager.LicenseCallback() {
+            @Override public void onValid(String storeId, String deviceId) {
+                runOnUiThread(() -> { btnActivate.setEnabled(true); showSetupScreen(); });
+            }
+            @Override public void onInvalid(String reason) {
+                runOnUiThread(() -> {
+                    btnActivate.setEnabled(true);
+                    switch(reason) {
+                        case "NOT_FOUND":     setLicenseStatus("Key tidak ditemukan.", "#ff4d6d"); break;
+                        case "REVOKED":       setLicenseStatus("License toko dicabut.", "#ff4d6d"); break;
+                        case "EXPIRED":       setLicenseStatus("License expired.", "#ffcc00"); break;
+                        case "DEVICE_REVOKED":setLicenseStatus("Unit TV ini dinonaktifkan.", "#ff4d6d"); break;
+                        default:              setLicenseStatus("Key tidak valid.", "#ff4d6d");
+                    }
+                });
+            }
+            @Override public void onError(String msg) {
+                runOnUiThread(() -> { btnActivate.setEnabled(true); setLicenseStatus("Gagal koneksi. Cek internet.", "#ffcc00"); });
+            }
+        });
+    }
+
+    private void setLicenseStatus(String msg, String color) {
+        if (tvLicenseStatus == null) return;
+        tvLicenseStatus.setText(msg);
+        tvLicenseStatus.setVisibility(View.VISIBLE);
+        try { tvLicenseStatus.setTextColor(android.graphics.Color.parseColor(color)); }
+        catch (Exception e) { tvLicenseStatus.setTextColor(android.graphics.Color.WHITE); }
+    }
+
+    private void showSetupScreen() {
+        setContentView(R.layout.activity_setup);
         etApiKey    = findViewById(R.id.etApiKey);
         etDbUrl     = findViewById(R.id.etDbUrl);
         etProjectId = findViewById(R.id.etProjectId);
@@ -40,6 +133,14 @@ public class SetupActivity extends AppCompatActivity {
         etTvName    = findViewById(R.id.etTvName);
         btnConnect  = findViewById(R.id.btnConnect);
         tvStatus    = findViewById(R.id.tvStatus);
+
+        TextView tvDeviceInfo = findViewById(R.id.tvDeviceInfo);
+        String deviceId = LicenseManager.getSavedDeviceId(this);
+        String storeId  = LicenseManager.getSavedStoreId(this);
+        if (tvDeviceInfo != null && !deviceId.isEmpty()) {
+            tvDeviceInfo.setText(storeId + " | " + deviceId);
+            tvDeviceInfo.setVisibility(View.VISIBLE);
+        }
 
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         etApiKey.setText(prefs.getString("apiKey", ""));
@@ -50,16 +151,9 @@ public class SetupActivity extends AppCompatActivity {
 
         btnConnect.setOnClickListener(v -> connectAndStart());
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
-            }
-        }
-
         if (!prefs.getString("apiKey", "").isEmpty() && hasOverlayPermission()) {
             startOverlayService();
-            showStatus("Service berjalan di background", "#00ff88");
+            showStatus("Service berjalan | " + deviceId, "#00ff88");
         }
     }
 
@@ -70,82 +164,62 @@ public class SetupActivity extends AppCompatActivity {
         String tvNumStr  = etTvNum.getText().toString().trim();
         String tvName    = etTvName.getText().toString().trim();
 
-        if (apiKey.isEmpty() || dbUrl.isEmpty() || projectId.isEmpty()) {
-            showStatus("Semua field wajib diisi!", "#ffcc00");
-            return;
-        }
-        if (!dbUrl.contains("firebaseio.com") && !dbUrl.contains("firebasedatabase.app")) {
-            showStatus("Database URL tidak valid!", "#ffcc00");
-            return;
-        }
+        if (apiKey.isEmpty() || dbUrl.isEmpty() || projectId.isEmpty()) { showStatus("Semua field wajib diisi!", "#ffcc00"); return; }
+        if (!dbUrl.contains("firebaseio.com") && !dbUrl.contains("firebasedatabase.app")) { showStatus("Database URL tidak valid!", "#ffcc00"); return; }
 
         int tvNum = 1;
         try { tvNum = Integer.parseInt(tvNumStr); } catch (Exception e) { tvNum = 1; }
         if (tvName.isEmpty()) tvName = "TV " + tvNum;
 
-        SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
-        editor.putString("apiKey", apiKey);
-        editor.putString("dbUrl", dbUrl);
-        editor.putString("projectId", projectId);
-        editor.putInt("tvNum", tvNum);
-        editor.putString("tvName", tvName);
-        editor.apply();
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            .putString("apiKey", apiKey).putString("dbUrl", dbUrl)
+            .putString("projectId", projectId).putInt("tvNum", tvNum)
+            .putString("tvName", tvName).apply();
 
-        if (!hasOverlayPermission()) {
-            showStatus("Butuh izin overlay. Aktifkan lalu kembali.", "#ffcc00");
-            requestOverlayPermission();
-        } else {
-            startOverlayService();
-            showStatus("Terhubung! Service berjalan.", "#00ff88");
+        String key = LicenseManager.getSavedKey(this);
+        if (!key.isEmpty()) {
+            final int fn = tvNum; final String ft = tvName;
+            LicenseManager.verifyAndRegister(this, key, fn, ft, new LicenseManager.LicenseCallback() {
+                @Override public void onValid(String s, String d) {}
+                @Override public void onInvalid(String r) {}
+                @Override public void onError(String m) {}
+            });
         }
+
+        if (!hasOverlayPermission()) { showStatus("Butuh izin overlay.", "#ffcc00"); requestOverlayPermission(); }
+        else { startOverlayService(); showStatus("Terhubung! | " + LicenseManager.getSavedDeviceId(this), "#00ff88"); }
     }
 
     private boolean hasOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return Settings.canDrawOverlays(this);
-        }
-        return true;
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
     }
 
     private void requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Intent intent = new Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:" + getPackageName())
-            );
-            startActivityForResult(intent, REQUEST_OVERLAY);
+            startActivityForResult(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getPackageName())), REQUEST_OVERLAY);
         }
     }
 
     private void startOverlayService() {
-        Intent serviceIntent = new Intent(this, OverlayService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
-        }
+        Intent si = new Intent(this, OverlayService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(si);
+        else startService(si);
     }
 
     private void showStatus(String msg, String color) {
         if (tvStatus == null) return;
         tvStatus.setText(msg);
-        try {
-            tvStatus.setTextColor(android.graphics.Color.parseColor(color));
-        } catch (Exception e) {
-            tvStatus.setTextColor(android.graphics.Color.WHITE);
-        }
+        try { tvStatus.setTextColor(android.graphics.Color.parseColor(color)); }
+        catch (Exception e) { tvStatus.setTextColor(android.graphics.Color.WHITE); }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_OVERLAY) {
-            if (hasOverlayPermission()) {
-                startOverlayService();
-                showStatus("Izin diberikan! Service berjalan.", "#00ff88");
-            } else {
-                showStatus("Izin ditolak. Tidak bisa overlay.", "#ff4d6d");
-            }
+            if (hasOverlayPermission()) { startOverlayService(); showStatus("Izin diberikan!", "#00ff88"); }
+            else showStatus("Izin ditolak.", "#ff4d6d");
         }
     }
 }
