@@ -198,7 +198,6 @@
                 android:layout_marginBottom="12dp"/>
 
             <!-- Status -->
-            <TextView
         <TextView
             android:id="@+id/tvDeviceInfo"
             android:layout_width="match_parent"
@@ -207,16 +206,17 @@
             android:textColor="#336688"
             android:gravity="center"
             android:visibility="gone"/>
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#00ff88"
+                android:gravity="center"
+                android:minHeight="20dp"/>
 
-        <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textSize="12sp"
-            android:textColor="#00ff88"
-            android:gravity="center"
-            android:minHeight="20dp"/>
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
