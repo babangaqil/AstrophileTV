@@ -50,7 +50,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="ASTRO-XXXX-XXXX-XXXX"
-            android:hintTextColor="#224455"
+            
             android:textColor="#ffffff"
             android:textSize="16sp"
             android:inputType="textCapCharacters"
