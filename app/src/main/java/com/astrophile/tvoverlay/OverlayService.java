@@ -437,24 +437,60 @@ public class OverlayService extends Service {
         } catch (Exception e) {}
     }
 
+    private com.google.firebase.database.ValueEventListener licenseListener = null;
+    private com.google.firebase.database.DatabaseReference licenseRef = null;
+
     private void checkLicensePeriodic() {
-        LicenseManager.checkRevoke(this, new LicenseManager.LicenseCallback() {
-            @Override public void onValid(String s, String d) {
-                new android.os.Handler().postDelayed(() -> checkLicensePeriodic(), 5 * 60 * 1000);
+        String key = LicenseManager.getSavedKey(this);
+        String deviceId = LicenseManager.getSavedDeviceId(this);
+        if (key.isEmpty()) return;
+        String keyHash = LicenseManager.hashKey(key.replace("-", "").toUpperCase());
+        try {
+            com.google.firebase.FirebaseApp masterApp;
+            try { masterApp = com.google.firebase.FirebaseApp.getInstance("_tv_license"); }
+            catch (Exception e) {
+                com.google.firebase.FirebaseOptions opts = new com.google.firebase.FirebaseOptions.Builder()
+                    .setApiKey("AIzaSyD8XffAZK8JUOBajCUVyPS-NT9jnwYBats")
+                    .setDatabaseUrl("https://astrophile-rental-default-rtdb.firebaseio.com")
+                    .setProjectId("astrophile-rental")
+                    .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
+                    .build();
+                masterApp = com.google.firebase.FirebaseApp.initializeApp(this, opts, "_tv_license");
             }
-            @Override public void onInvalid(String reason) {
-                LicenseManager.clearLicense(OverlayService.this);
-                stopSelf();
-                android.content.Intent i = new android.content.Intent(OverlayService.this, SetupActivity.class);
-                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(i);
-            }
-            @Override public void onError(String m) {
-                new android.os.Handler().postDelayed(() -> checkLicensePeriodic(), 2 * 60 * 1000);
-            }
-        });
+            licenseRef = com.google.firebase.database.FirebaseDatabase.getInstance(masterApp)
+                .getReference("tvLicenseKeys/" + keyHash);
+            licenseListener = new com.google.firebase.database.ValueEventListener() {
+                @Override
+                public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
+                    if (!snap.exists()) { blockOverlay(); return; }
+                    Boolean revoked = snap.child("revoked").getValue(Boolean.class);
+                    Long expiredAt = snap.child("expiredAt").getValue(Long.class);
+                    if (Boolean.TRUE.equals(revoked)) { blockOverlay(); return; }
+                    if (expiredAt != null && System.currentTimeMillis() > expiredAt) { blockOverlay(); return; }
+                    if (!deviceId.isEmpty()) {
+                        com.google.firebase.database.DataSnapshot dev = snap.child("devices").child(deviceId);
+                        if (dev.exists() && Boolean.TRUE.equals(dev.child("revoked").getValue(Boolean.class))) {
+                            blockOverlay(); return;
+                        }
+                    }
+                }
+                @Override
+                public void onCancelled(com.google.firebase.database.DatabaseError e) {}
+            };
+            licenseRef.addValueEventListener(licenseListener);
+        } catch (Exception e) {}
     }
+
+    private void blockOverlay() {
+        LicenseManager.clearLicense(this);
+        stopSelf();
+        android.content.Intent i = new android.content.Intent(this, SetupActivity.class);
+        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(i);
+    }
+
+    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        return START_STICKY; // Restart otomatis kalau mati
+        return START_STICKY;
     }
-}
+
