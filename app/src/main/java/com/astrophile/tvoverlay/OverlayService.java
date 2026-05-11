@@ -437,7 +437,6 @@ public class OverlayService extends Service {
         } catch (Exception e) {}
     }
 
-    @Override
     private void checkLicensePeriodic() {
         LicenseManager.checkRevoke(this, new LicenseManager.LicenseCallback() {
             @Override public void onValid(String s, String d) {
