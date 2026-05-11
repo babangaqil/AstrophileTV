@@ -70,6 +70,7 @@ public class OverlayService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        checkLicensePeriodic();
         mainHandler = new Handler(Looper.getMainLooper());
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         startForegroundNotification();
@@ -437,6 +438,23 @@ public class OverlayService extends Service {
     }
 
     @Override
+    private void checkLicensePeriodic() {
+        LicenseManager.checkRevoke(this, new LicenseManager.LicenseCallback() {
+            @Override public void onValid(String s, String d) {
+                new android.os.Handler().postDelayed(() -> checkLicensePeriodic(), 5 * 60 * 1000);
+            }
+            @Override public void onInvalid(String reason) {
+                LicenseManager.clearLicense(OverlayService.this);
+                stopSelf();
+                android.content.Intent i = new android.content.Intent(OverlayService.this, SetupActivity.class);
+                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(i);
+            }
+            @Override public void onError(String m) {
+                new android.os.Handler().postDelayed(() -> checkLicensePeriodic(), 2 * 60 * 1000);
+            }
+        });
+    }
     public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY; // Restart otomatis kalau mati
     }
