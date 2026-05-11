@@ -181,7 +181,7 @@ public class OverlayService extends Service {
                     .setApiKey(apiKey)
                     .setDatabaseUrl(dbUrl)
                     .setProjectId(projectId)
-                    .setApplicationId("1:000000000000:android:0000000000000000")
+                    .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
                     .build();
                 app = FirebaseApp.initializeApp(this, options, "astro_tv");
             }
