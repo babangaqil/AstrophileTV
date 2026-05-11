@@ -228,7 +228,7 @@ public class OverlayService extends Service {
         mainHandler.post(() -> {
             if (isExp) {
                 showExpired();
-            } else if (isAct && startTime > 0) {
+            } else if (isAct) {
                 isExpired = false;
                 isActive  = true;
                 hideExpired();
@@ -491,6 +491,12 @@ public class OverlayService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (sessionRef == null || sessionListener == null) {
+            initFirebase();
+        } else {
+            sessionRef.removeEventListener(sessionListener);
+            sessionRef.addValueEventListener(sessionListener);
+        }
         return START_STICKY;
     }
 
