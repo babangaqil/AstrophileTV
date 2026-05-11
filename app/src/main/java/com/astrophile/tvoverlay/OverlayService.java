@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -48,6 +49,9 @@ public class OverlayService extends Service {
     private Timer tickTimer;
     private ToneGenerator toneGen;
 
+    // WakeLock — cegah Firebase di-throttle saat background
+    private PowerManager.WakeLock wakeLock;
+
     private FirebaseDatabase firebaseDb;
     private DatabaseReference sessionRef;
     private ValueEventListener sessionListener;
@@ -74,6 +78,12 @@ public class OverlayService extends Service {
         mainHandler = new Handler(Looper.getMainLooper());
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         startForegroundNotification();
+
+        // Acquire WakeLock agar Firebase listener tetap aktif di background
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AstrophileTV:overlay");
+        if (!wakeLock.isHeld()) wakeLock.acquire();
+
         initOverlayViews();
         initFirebase();
         startTicker();
@@ -187,6 +197,9 @@ public class OverlayService extends Service {
             }
 
             firebaseDb = FirebaseDatabase.getInstance(app);
+            // Aktifkan persistence agar data tetap diterima saat background
+            try { firebaseDb.setPersistenceEnabled(true); } catch (Exception ignored) {}
+
             sessionRef = firebaseDb.getReference("settings/activeSessions/" + tvNum);
 
             sessionListener = new ValueEventListener() {
@@ -195,9 +208,19 @@ public class OverlayService extends Service {
                     handleFirebaseData(snapshot);
                 }
                 @Override
-                public void onCancelled(DatabaseError error) {}
+                public void onCancelled(DatabaseError error) {
+                    // Reconnect otomatis setelah error
+                    mainHandler.postDelayed(() -> {
+                        if (sessionRef != null && sessionListener != null) {
+                            sessionRef.removeEventListener(sessionListener);
+                            sessionRef.addValueEventListener(sessionListener);
+                        }
+                    }, 3000);
+                }
             };
             sessionRef.addValueEventListener(sessionListener);
+            // Pastikan koneksi tetap aktif dengan keepSynced
+            sessionRef.keepSynced(true);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -232,7 +255,7 @@ public class OverlayService extends Service {
                 isExpired = false;
                 isActive  = true;
                 hideExpired();
-                showWidget();
+                if (startTime > 0) showWidget();
             } else {
                 isActive = false;
                 hideAll();
@@ -255,7 +278,6 @@ public class OverlayService extends Service {
 
     // ── WIDGET ─────────────────────────────────────────────────
     private void showWidget() {
-        // widget diatur di updateWidget
         widgetView.setVisibility(View.VISIBLE);
         updateWidget();
     }
@@ -283,13 +305,10 @@ public class OverlayService extends Service {
 
         if (isCountdown) {
             if (secs <= 0) {
-                // Expired!
                 showExpired();
                 return;
             } else if (secs <= 60) {
                 widgetView.setVisibility(View.VISIBLE);
-                widgetView.setVisibility(View.VISIBLE);
-                // Bahaya — merah berkedip
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
                 if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
                 if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
@@ -298,8 +317,6 @@ public class OverlayService extends Service {
                 }
             } else if (secs <= 300) {
                 if (!toast5Shown) { widgetView.setVisibility(View.VISIBLE); mainHandler.postDelayed(() -> widgetView.setVisibility(View.GONE), 10000); }
-                if (!toast5Shown) { widgetView.setVisibility(View.VISIBLE); mainHandler.postDelayed(() -> widgetView.setVisibility(View.GONE), 10000); }
-                // Warning — kuning
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
                 if (tvLabel != null) tvLabel.setText("SISA WAKTU");
                 if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
@@ -307,7 +324,6 @@ public class OverlayService extends Service {
                     toast5Shown = true;
                 }
             } else {
-                // Normal — widget disembunyikan
                 widgetView.setVisibility(View.GONE);
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#00f5ff"));
                 if (tvLabel != null) tvLabel.setText("SISA WAKTU");
@@ -357,7 +373,6 @@ public class OverlayService extends Service {
 
         expiredView.setVisibility(View.VISIBLE);
 
-        // Play alarm sound
         playAlarm();
     }
 
@@ -430,6 +445,8 @@ public class OverlayService extends Service {
             sessionRef.removeEventListener(sessionListener);
         }
         stopAlarm();
+        // Release WakeLock
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         try {
             if (widgetView != null)  windowManager.removeView(widgetView);
             if (toastView != null)   windowManager.removeView(toastView);
@@ -491,6 +508,7 @@ public class OverlayService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // Reconnect Firebase jika listener terlepas
         if (sessionRef == null || sessionListener == null) {
             initFirebase();
         } else {
