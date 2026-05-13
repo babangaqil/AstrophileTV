@@ -226,6 +226,10 @@ public class OverlayService extends Service {
             listenTvControl();
             // Listen nama toko → update idle screen real-time
             listenStoreName();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void handleFirebaseData(DataSnapshot snapshot) {
@@ -683,6 +687,8 @@ public class OverlayService extends Service {
             if (sleepView != null) { windowManager.removeView(sleepView); sleepView = null; }
         } catch (Exception e) { sleepView = null; }
     }
+
+    private void checkGlobalUpdate() {
         try {
             // Real-time listener agar langsung update saat admin ubah
             if (globalUpdateRef != null && globalUpdateListener != null) {
