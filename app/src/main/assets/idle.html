@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+
+.frame{
+  width:100%;max-width:920px;aspect-ratio:16/9;
+  position:relative;overflow:hidden;border-radius:8px;
+  background:linear-gradient(160deg,#040810,#020508,#040810);
+  border:1px solid rgba(0,245,255,0.10);
+  box-shadow:0 0 80px rgba(0,0,0,0.95),inset 0 1px 0 rgba(0,245,255,0.06);
+}
+
+.bg{position:absolute;inset:0;background:
+  radial-gradient(ellipse 100% 60% at 50% 110%,rgba(0,100,255,0.12) 0%,transparent 60%),
+  radial-gradient(ellipse 40% 35% at 5% 5%,rgba(80,0,255,0.06) 0%,transparent 55%)}
+.scan{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px)}
+.tline{position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent 5%,#00f5ff 35%,#7700ff 50%,#00f5ff 65%,transparent 95%);
+  background-size:220% 100%;animation:sl 5s linear infinite;
+  box-shadow:0 0 12px rgba(0,245,255,0.5)}
+.bline{position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent 10%,rgba(0,245,255,0.25) 50%,transparent 90%)}
+@keyframes sl{0%{background-position:110% 0}100%{background-position:-110% 0}}
+
+/* 3 rows */
+.row1{position:absolute;top:0;left:0;right:0;height:33%;
+  display:flex;align-items:center;justify-content:center;
+  border-bottom:1px solid rgba(0,245,255,0.07)}
+.row2{position:absolute;top:33%;left:0;right:0;height:34%;
+  display:flex;align-items:center;justify-content:center;gap:clamp(14px,3%,36px)}
+.row3{position:absolute;top:67%;left:0;right:0;height:33%;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 clamp(20px,4%,44px);
+  border-top:1px solid rgba(0,245,255,0.07);
+  background:linear-gradient(to top,rgba(2,5,12,0.92) 0%,transparent 100%)}
+
+/* Store name */
+.sname{
+  font-family:'Orbitron',monospace;
+  font-size:clamp(15px,2.8vw,34px);font-weight:900;
+  text-transform:uppercase;letter-spacing:clamp(5px,1.3vw,16px);
+  background:linear-gradient(90deg,#ff0066,#ff5500,#ffcc00,#00ff88,#00f5ff,#6600ff,#ff0066,#ff5500);
+  background-size:400% 100%;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:aurora 8s linear infinite, glitch 6s steps(1) infinite;
+  filter:drop-shadow(0 0 12px rgba(0,245,255,0.35));
+}
+@keyframes aurora{0%{background-position:0%}100%{background-position:400%}}
+@keyframes glitch{
+  0%,88%,100%{transform:none;filter:drop-shadow(0 0 12px rgba(0,245,255,0.35))}
+  89%{transform:translate(-2px,0) skewX(-4deg);filter:drop-shadow(-3px 0 rgba(255,0,100,0.7)) drop-shadow(3px 0 rgba(0,245,255,0.7))}
+  90%{transform:translate(2px,0) skewX(2deg);filter:drop-shadow(3px 0 rgba(255,0,100,0.7)) drop-shadow(-3px 0 rgba(0,245,255,0.7))}
+  91%,92%{transform:none;filter:drop-shadow(0 0 12px rgba(0,245,255,0.35))}
+  96%{transform:translate(1px,0) scaleX(1.004);filter:drop-shadow(-2px 0 rgba(255,0,80,0.4))}
+  97%{transform:none}
+}
+
+/* Clock */
+.clock-wrap{display:flex;flex-direction:column;align-items:center;gap:clamp(3px,.5%,6px)}
+.clock{
+  font-family:'Orbitron',monospace;
+  font-size:clamp(20px,4vw,50px);font-weight:700;
+  color:#fff;letter-spacing:clamp(3px,.8vw,8px);
+  text-shadow:0 0 14px rgba(0,245,255,0.9),0 0 40px rgba(0,245,255,0.4),0 0 70px rgba(0,245,255,0.15);
+}
+.colon{
+  color:#00f5ff;
+  animation:colonBlink 1s step-start infinite;
+  text-shadow:0 0 10px rgba(0,245,255,0.9);
+}
+@keyframes colonBlink{0%,100%{opacity:1}50%{opacity:0.08}}
+.date-txt{
+  font-family:'Rajdhani',sans-serif;
+  font-size:clamp(8px,1vw,12px);font-weight:600;
+  color:rgba(0,245,255,0.55);letter-spacing:3px;text-align:center;
+}
+
+/* Vertical separator */
+.vsep{width:1px;align-self:stretch;margin:18% 0;
+  background:linear-gradient(to bottom,transparent,rgba(0,245,255,0.28),transparent);
+  box-shadow:0 0 6px rgba(0,245,255,0.18);flex-shrink:0}
+
+/* Status col */
+.right-col{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:clamp(80px,18%,180px)}
+
+/* Chip */
+.chip{display:flex;align-items:center;gap:clamp(6px,.9vw,10px);
+  background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.28);
+  border-radius:100px;padding:clamp(4px,.6%,7px) clamp(14px,2.2%,26px);
+  box-shadow:0 0 18px rgba(0,255,136,0.07)}
+.dot{width:clamp(6px,.8vw,9px);height:clamp(6px,.8vw,9px);border-radius:50%;
+  background:#00ff88;box-shadow:0 0 8px #00ff88,0 0 18px rgba(0,255,136,.4);
+  animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 8px #00ff88,0 0 18px rgba(0,255,136,.4)}50%{opacity:.25;box-shadow:0 0 2px #00ff88}}
+.ctxt{font-family:'Orbitron',monospace;font-size:clamp(8px,1.05vw,13px);font-weight:700;
+  color:#00ff88;letter-spacing:clamp(2px,.5vw,5px);text-shadow:0 0 8px rgba(0,255,136,0.4)}
+
+/* Unit counter */
+.unit-bar{display:flex;align-items:center;gap:3px;
+  background:rgba(0,245,255,0.05);border:1px solid rgba(0,245,255,0.14);
+  border-radius:20px;padding:clamp(2px,.4%,4px) clamp(8px,1.4%,16px)}
+.u-active{font-family:'Orbitron',monospace;font-size:clamp(9px,1.1vw,14px);font-weight:900;
+  color:#00f5ff;text-shadow:0 0 8px rgba(0,245,255,0.7)}
+.u-div{font-family:'Orbitron',monospace;font-size:clamp(8px,1vw,12px);
+  color:rgba(0,245,255,0.28);margin:0 2px}
+.u-total{font-family:'Orbitron',monospace;font-size:clamp(9px,1.1vw,14px);font-weight:700;
+  color:rgba(255,255,255,0.38)}
+.u-label{font-family:'Rajdhani',sans-serif;font-size:clamp(5px,.65vw,8px);font-weight:700;
+  color:rgba(0,245,255,0.40);letter-spacing:1.5px;margin-left:clamp(3px,.5%,6px)}
+
+/* TV info (row 3 left) */
+.tv-block{display:flex;flex-direction:column;gap:1px}
+.tv-lbl{font-family:'Rajdhani',sans-serif;font-size:clamp(7px,.85vw,10px);font-weight:600;
+  color:rgba(0,245,255,.55);letter-spacing:3px}
+.tv-name{font-family:'Orbitron',monospace;font-size:clamp(18px,3.2vw,40px);font-weight:900;
+  color:#00f5ff;letter-spacing:3px;line-height:1;
+  text-shadow:0 0 16px rgba(0,245,255,.65),0 0 40px rgba(0,245,255,.18)}
+.tv-pow{font-family:'Rajdhani',sans-serif;font-size:clamp(6px,.68vw,8px);
+  color:rgba(255,255,255,0.28);letter-spacing:0.5px;margin-top:2px;font-weight:600}
+.tv-pow em{color:rgba(0,245,255,0.55);font-style:normal;font-weight:700}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="bg"></div>
+  <div class="scan"></div>
+  <div class="tline"></div>
+  <div class="bline"></div>
+
+  <!-- Particles -->
+  <canvas id="pc" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:0.45"></canvas>
+
+  <!-- Stars + Meteors -->
+  <canvas id="stars" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none"></canvas>
+
+  <!-- Row 1: Store name -->
+  <div class="row1" style="z-index:5">
+    <div class="sname">GEMBOX PS</div>
+  </div>
+
+  <!-- Row 2: Clock | Status -->
+  <div class="row2" style="z-index:5">
+    <div class="clock-wrap">
+      <div class="clock">
+        <span id="ch">00</span><span class="colon">:</span><span id="cm">00</span><span class="colon">:</span><span id="cs">00</span>
+      </div>
+      <div class="date-txt" id="dt">·</div>
+    </div>
+    <div class="vsep"></div>
+    <div class="right-col" style="padding-left:clamp(10px,2%,28px)">
+      <div class="chip"><div class="dot"></div><div class="ctxt">TERSEDIA</div></div>
+    </div>
+  </div>
+
+  <!-- Row 3: TV + date -->
+  <div class="row3" style="z-index:5">
+    <div class="tv-block">
+      <div class="tv-lbl">UNIT KONSOL</div>
+      <div class="tv-name">TV 1</div>
+      <div class="tv-pow">Powered by <em>ASTROPHILE</em> · v1.0</div>
+    </div>
+    <div class="date-txt" id="dt2" style="text-align:right;font-size:clamp(7px,.85vw,10px);color:rgba(0,245,255,0.50)">·</div>
+  </div>
+</div>
+
+<script>
+const D=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu']
+const M=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+function tick(){
+  const n=new Date()
+  document.getElementById('ch').textContent=String(n.getHours()).padStart(2,'0')
+  document.getElementById('cm').textContent=String(n.getMinutes()).padStart(2,'0')
+  document.getElementById('cs').textContent=String(n.getSeconds()).padStart(2,'0')
+  const d=D[n.getDay()]+',  '+n.getDate()+' '+M[n.getMonth()]+' '+n.getFullYear()
+  document.getElementById('dt').textContent=d
+  document.getElementById('dt2').textContent=d
+}
+tick();setInterval(tick,1000)
+
+// Stars + Meteor shower
+;(function(){
+  const c = document.getElementById('stars')
+  if(!c) return
+  const ctx = c.getContext('2d')
+  function resize(){
+    const r=c.parentElement.getBoundingClientRect()
+    c.width=r.width||400; c.height=r.height||225
+    initStars()
+  }
+
+  // ── Static stars ──
+  let stars = []
+  function initStars(){
+    stars = Array.from({length:80}, ()=>({
+      x: Math.random()*c.width,
+      y: Math.random()*c.height,
+      r: Math.random()*1.2+0.2,
+      a: Math.random()*0.7+0.15,
+      twinkleSpeed: Math.random()*0.04+0.01,
+      twinklePhase: Math.random()*Math.PI*2
+    }))
+  }
+
+  // ── Meteors ──
+  let meteors = []
+  function spawnMeteor(){
+    const x = Math.random()*c.width*1.4 - c.width*0.2
+    meteors.push({
+      x, y:-10,
+      vx: c.width * (Math.random()*0.008+0.006),
+      vy: c.height * (Math.random()*0.012+0.008),
+      len: Math.random()*60+40,
+      alpha: 1,
+      width: Math.random()*1.2+0.5,
+      color: Math.random()>0.5 ? '#00f5ff' : '#ffffff'
+    })
+  }
+
+  // Spawn meteor every 2.5–5s
+  function scheduleMeteor(){
+    setTimeout(()=>{
+      spawnMeteor()
+      if(Math.random()>0.5) setTimeout(spawnMeteor, 180)
+      scheduleMeteor()
+    }, Math.random()*2500+2000)
+  }
+  scheduleMeteor()
+
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height)
+
+    // Draw stars
+    const t = Date.now()*0.001
+    stars.forEach(s=>{
+      s.twinklePhase += s.twinkleSpeed
+      const a = s.a*(0.4 + 0.6*Math.abs(Math.sin(s.twinklePhase)))
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2)
+      ctx.fillStyle = `rgba(255,255,255,${a})`
+      if(s.r > 0.9){
+        ctx.shadowColor='rgba(200,240,255,0.8)'
+        ctx.shadowBlur=4
+      } else {
+        ctx.shadowBlur=0
+      }
+      ctx.fill()
+    })
+
+    // Draw meteors
+    ctx.shadowBlur = 0
+    meteors = meteors.filter(m=>{
+      // Tail gradient
+      const grad = ctx.createLinearGradient(
+        m.x - m.vx*m.len/m.vy, m.y - m.len,
+        m.x, m.y
+      )
+      grad.addColorStop(0, `rgba(255,255,255,0)`)
+      grad.addColorStop(0.5, `${m.color.replace(')',`,${m.alpha*0.35})`).replace('rgb','rgba')}`)
+      grad.addColorStop(1, `${m.color.replace(')',`,${m.alpha})`).replace('rgb','rgba')}`)
+
+      const angle = Math.atan2(m.vy, m.vx)
+      const tailLen = m.len
+      ctx.save()
+      ctx.translate(m.x, m.y)
+      ctx.rotate(angle)
+      ctx.beginPath()
+      ctx.moveTo(-tailLen, 0)
+      ctx.lineTo(0, 0)
+      ctx.strokeStyle = grad
+      ctx.lineWidth = m.width
+      ctx.lineCap = 'round'
+      ctx.shadowColor = m.color
+      ctx.shadowBlur = 6
+      ctx.stroke()
+
+      // Head dot
+      ctx.beginPath()
+      ctx.arc(0, 0, m.width*0.8, 0, Math.PI*2)
+      ctx.fillStyle = `rgba(255,255,255,${m.alpha})`
+      ctx.shadowBlur = 10
+      ctx.fill()
+      ctx.restore()
+
+      m.x += m.vx; m.y += m.vy
+      m.alpha -= 0.012
+      return m.alpha > 0 && m.y < c.height + 20 && m.x < c.width + 50
+    })
+
+    requestAnimationFrame(draw)
+  }
+
+  resize()
+  draw()
+  window.addEventListener('resize', resize)
+})()
+
+// ── Floating particles ──
+;(function(){
+  const c=document.getElementById('pc')
+  if(!c)return
+  const ctx=c.getContext('2d')
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width||400;c.height=r.height||225}
+  resize()
+  const pts=Array.from({length:30},()=>({
+    x:Math.random()*c.width,y:Math.random()*c.height,
+    r:Math.random()*1.4+0.3,
+    vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,
+    a:Math.random()*.5+.15,ph:Math.random()*Math.PI*2
+  }))
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height)
+    pts.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.ph+=.018
+      if(p.x<0)p.x=c.width;if(p.x>c.width)p.x=0
+      if(p.y<0)p.y=c.height;if(p.y>c.height)p.y=0
+      const a=p.a*(.5+.5*Math.sin(p.ph))
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2)
+      ctx.fillStyle=`rgba(0,220,255,${a})`
+      ctx.shadowColor='#00f5ff';ctx.shadowBlur=5
+      ctx.fill()
+    })
+    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+      const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,dist=Math.sqrt(dx*dx+dy*dy)
+      if(dist<65){ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.strokeStyle=`rgba(0,200,255,${.06*(1-dist/65)})`;ctx.lineWidth=.5;ctx.shadowBlur=0;ctx.stroke()}
+    }
+    requestAnimationFrame(draw)
+  }
+  draw();window.addEventListener('resize',resize)
+})()
+</script>
+</body>
+</html>

@@ -260,6 +260,7 @@ public class OverlayService extends Service {
             } else {
                 isActive = false;
                 hideAll();
+                showIdle();
             }
         });
     }
@@ -383,6 +384,59 @@ public class OverlayService extends Service {
         stopAlarm();
     }
 
+    private View idleView = null;  // Badge TERSEDIA di pojok
+
+    private void showIdle() {
+        if (updateView != null) return;
+        if (idleView != null) { idleView.setVisibility(android.view.View.VISIBLE); return; }
+        try {
+            String appVersion = "1.0";
+            try { appVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch(Exception ignored){}
+            final String fVer     = appVersion;
+            final int    fTvNum   = tvNum;
+            final String fTvName  = (tvName != null && !tvName.isEmpty()) ? tvName.replace("'","") : "TV " + tvNum;
+
+            android.webkit.WebView wv = new android.webkit.WebView(this);
+            wv.getSettings().setJavaScriptEnabled(true);
+            wv.getSettings().setDomStorageEnabled(true);
+            wv.getSettings().setBuiltInZoomControls(false);
+            wv.getSettings().setDisplayZoomControls(false);
+            wv.setBackgroundColor(android.graphics.Color.BLACK);
+
+            wv.setWebViewClient(new android.webkit.WebViewClient(){
+                @Override
+                public void onPageFinished(android.webkit.WebView view, String url){
+                    // Inject nama toko, nomor TV, versi APK
+                    view.evaluateJavascript(
+                        "try{" +
+                        "  document.querySelectorAll('.sname').forEach(function(el){el.textContent='" + fTvName + "'});" +
+                        "  document.querySelectorAll('.tv-name').forEach(function(el){el.textContent='TV " + fTvNum + "'});" +
+                        "  document.querySelectorAll('.tv-pow').forEach(function(el){el.innerHTML='Powered by <em>ASTROPHILE</em> \\u00b7 v" + fVer + "'});" +
+                        "}catch(e){}", null
+                    );
+                }
+            });
+            wv.loadUrl("file:///android_asset/idle.html");
+
+            int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
+                ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
+
+            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams(
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                overlayType,
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                android.graphics.PixelFormat.OPAQUE
+            );
+            lp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
+
+            idleView = wv;
+            windowManager.addView(idleView, lp);
+        } catch (Exception e) {}
+    }
+
     private void hideAll() {
         isActive  = false;
         isExpired = false;
@@ -391,6 +445,7 @@ public class OverlayService extends Service {
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
+        if (idleView != null) idleView.setVisibility(android.view.View.GONE);
         stopAlarm();
     }
 
@@ -453,7 +508,10 @@ public class OverlayService extends Service {
             if (toastView   != null) windowManager.removeView(toastView);
             if (expiredView != null) windowManager.removeView(expiredView);
             if (updateView  != null) windowManager.removeView(updateView);
+            if (idleView    != null) windowManager.removeView(idleView);
         } catch (Exception e) {}
+        if (globalUpdateRef != null && globalUpdateListener != null)
+            globalUpdateRef.removeEventListener(globalUpdateListener);
     }
 
     private com.google.firebase.database.ValueEventListener licenseListener = null;
@@ -516,37 +574,54 @@ public class OverlayService extends Service {
         } catch (Exception e) {}
     }
 
+    private com.google.firebase.database.ValueEventListener globalUpdateListener = null;
+    private com.google.firebase.database.DatabaseReference  globalUpdateRef      = null;
+
     private void checkGlobalUpdate() {
         try {
-            FirebaseDatabase.getInstance(getMasterApp())
-                .getReference("settings/globalUpdate")
-                .addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override public void onDataChange(DataSnapshot snap) {
-                        if (!snap.exists()) return;
-                        Boolean enabled = snap.child("enabled").getValue(Boolean.class);
-                        if (!Boolean.TRUE.equals(enabled)) return;
+            // Real-time listener agar langsung update saat admin ubah
+            if (globalUpdateRef != null && globalUpdateListener != null) {
+                globalUpdateRef.removeEventListener(globalUpdateListener);
+            }
+            globalUpdateRef = com.google.firebase.database.FirebaseDatabase
+                .getInstance(getMasterApp())
+                .getReference("settings/globalUpdate");
 
-                        String minVersion = snap.child("minVersion").getValue(String.class);
-                        String url        = snap.child("url").getValue(String.class);
-                        String message    = snap.child("message").getValue(String.class);
-                        if (minVersion == null || minVersion.isEmpty()) return;
-
-                        // Ambil versi APK yang terinstall saat ini
-                        String currentVersion = "";
-                        try {
-                            currentVersion = getPackageManager()
-                                .getPackageInfo(getPackageName(), 0).versionName;
-                        } catch (Exception e) { return; }
-
-                        if (isVersionLower(currentVersion, minVersion)) {
-                            final String fUrl = url != null ? url : "";
-                            final String fMsg = message != null ? message : "Pembaruan tersedia. Silakan update aplikasi.";
-                            final String fVer = "v" + minVersion;
-                            mainHandler.post(() -> showForceUpdate(fVer, fUrl, fMsg));
-                        }
+            globalUpdateListener = new com.google.firebase.database.ValueEventListener() {
+                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
+                    if (!snap.exists()) return;
+                    Boolean enabled = snap.child("enabled").getValue(Boolean.class);
+                    if (!Boolean.TRUE.equals(enabled)) {
+                        // Update dimatikan → sembunyikan overlay update jika ada
+                        mainHandler.post(() -> {
+                            if (updateView != null) {
+                                try { windowManager.removeView(updateView); } catch (Exception ignored) {}
+                                updateView = null;
+                            }
+                        });
+                        return;
                     }
-                    @Override public void onCancelled(DatabaseError e) {}
-                });
+                    String minVersion = snap.child("minVersion").getValue(String.class);
+                    String url        = snap.child("url").getValue(String.class);
+                    String message    = snap.child("message").getValue(String.class);
+                    if (minVersion == null || minVersion.isEmpty()) return;
+
+                    String currentVersion = "";
+                    try {
+                        currentVersion = getPackageManager()
+                            .getPackageInfo(getPackageName(), 0).versionName;
+                    } catch (Exception e) { return; }
+
+                    if (isVersionLower(currentVersion, minVersion)) {
+                        final String fUrl = url != null ? url : "";
+                        final String fMsg = message != null ? message : "Pembaruan tersedia. Silakan update aplikasi.";
+                        final String fVer = "v" + minVersion;
+                        mainHandler.post(() -> showForceUpdate(fVer, fUrl, fMsg));
+                    }
+                }
+                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
+            };
+            globalUpdateRef.addValueEventListener(globalUpdateListener);
         } catch (Exception e) {}
     }
 
@@ -602,14 +677,22 @@ public class OverlayService extends Service {
         if (tvMessage != null) tvMessage.setText(message);
         if (btnUpdate != null) {
             btnUpdate.setOnClickListener(v -> {
+                // Sembunyikan overlay dulu saat buka browser
+                if (updateView != null) updateView.setVisibility(android.view.View.GONE);
+
                 if (!url.isEmpty()) {
                     try {
-                        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse(url));
+                        android.content.Intent i = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
                         i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(i);
                     } catch (Exception e) {}
                 }
+
+                // Tampilkan kembali saat user balik ke TV app (delay 2 detik)
+                mainHandler.postDelayed(() -> {
+                    if (updateView != null) updateView.setVisibility(android.view.View.VISIBLE);
+                }, 2000);
             });
         }
 
