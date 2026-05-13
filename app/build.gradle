@@ -7,18 +7,12 @@ android {
     compileSdk 35
     namespace 'com.astrophile.tvoverlay'
 
-    buildFeatures {
-        buildConfig true
-    }
-
     defaultConfig {
         applicationId "com.astrophile.tvoverlay"
         minSdk 21
         targetSdk 35
         versionCode 1
         versionName "1.0"
-        // Auto-generate build timestamp — tidak perlu edit manual
-        buildConfigField "long", "BUILD_TIME", System.currentTimeMillis() + "L"
     }
 
     buildTypes {
