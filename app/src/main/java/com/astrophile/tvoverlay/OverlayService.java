@@ -222,10 +222,8 @@ public class OverlayService extends Service {
             sessionRef.addValueEventListener(sessionListener);
             // Pastikan koneksi tetap aktif dengan keepSynced
             sessionRef.keepSynced(true);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+            // Listen untuk perintah TV dari billing app
+            listenTvControl();
     }
 
     private void handleFirebaseData(DataSnapshot snapshot) {
@@ -509,9 +507,12 @@ public class OverlayService extends Service {
             if (expiredView != null) windowManager.removeView(expiredView);
             if (updateView  != null) windowManager.removeView(updateView);
             if (idleView    != null) windowManager.removeView(idleView);
+            if (sleepView   != null) windowManager.removeView(sleepView);
         } catch (Exception e) {}
         if (globalUpdateRef != null && globalUpdateListener != null)
             globalUpdateRef.removeEventListener(globalUpdateListener);
+        if (tvControlRef != null && tvControlListener != null)
+            tvControlRef.removeEventListener(tvControlListener);
     }
 
     private com.google.firebase.database.ValueEventListener licenseListener = null;
@@ -577,7 +578,75 @@ public class OverlayService extends Service {
     private com.google.firebase.database.ValueEventListener globalUpdateListener = null;
     private com.google.firebase.database.DatabaseReference  globalUpdateRef      = null;
 
-    private void checkGlobalUpdate() {
+    private com.google.firebase.database.ValueEventListener tvControlListener = null;
+    private com.google.firebase.database.DatabaseReference  tvControlRef      = null;
+
+    private void listenTvControl() {
+        try {
+            if (tvControlRef != null && tvControlListener != null)
+                tvControlRef.removeEventListener(tvControlListener);
+
+            tvControlRef = firebaseDb.getReference("settings/tvControl/" + tvNum);
+            tvControlListener = new com.google.firebase.database.ValueEventListener() {
+                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
+                    if (!snap.exists()) return;
+                    String cmd = snap.child("cmd").getValue(String.class);
+                    if (cmd == null || cmd.equals("none")) return;
+                    mainHandler.post(() -> {
+                        switch (cmd) {
+                            case "idle":
+                                hideAll();
+                                showIdle();
+                                break;
+                            case "sleep":
+                                showSleep();
+                                break;
+                            case "wake":
+                                hideSleep();
+                                if (idleView == null) showIdle();
+                                else idleView.setVisibility(android.view.View.VISIBLE);
+                                break;
+                        }
+                    });
+                }
+                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
+            };
+            tvControlRef.addValueEventListener(tvControlListener);
+        } catch (Exception e) {}
+    }
+
+    private View sleepView = null;
+
+    private void showSleep() {
+        if (sleepView != null) return;
+        try {
+            android.view.View black = new android.view.View(OverlayService.this);
+            black.setBackgroundColor(android.graphics.Color.BLACK);
+            // Hide idle if showing
+            if (idleView != null) idleView.setVisibility(android.view.View.GONE);
+
+            int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
+                ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
+
+            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams(
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                overlayType,
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                android.graphics.PixelFormat.OPAQUE
+            );
+            sleepView = black;
+            windowManager.addView(sleepView, lp);
+        } catch (Exception e) {}
+    }
+
+    private void hideSleep() {
+        try {
+            if (sleepView != null) { windowManager.removeView(sleepView); sleepView = null; }
+        } catch (Exception e) { sleepView = null; }
+    }
         try {
             // Real-time listener agar langsung update saat admin ubah
             if (globalUpdateRef != null && globalUpdateListener != null) {
