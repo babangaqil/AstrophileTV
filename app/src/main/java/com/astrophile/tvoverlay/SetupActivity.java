@@ -126,13 +126,10 @@ public class SetupActivity extends AppCompatActivity {
 
     private void showSetupScreen() {
         setContentView(R.layout.activity_setup);
-        etApiKey    = findViewById(R.id.etApiKey);
-        etDbUrl     = findViewById(R.id.etDbUrl);
-        etProjectId = findViewById(R.id.etProjectId);
-        etTvNum     = findViewById(R.id.etTvNum);
-        etTvName    = findViewById(R.id.etTvName);
-        btnConnect  = findViewById(R.id.btnConnect);
-        tvStatus    = findViewById(R.id.tvStatus);
+        etTvNum    = findViewById(R.id.etTvNum);
+        etTvName   = findViewById(R.id.etTvName);
+        btnConnect = findViewById(R.id.btnConnect);
+        tvStatus   = findViewById(R.id.tvStatus);
 
         TextView tvDeviceInfo = findViewById(R.id.tvDeviceInfo);
         String deviceId = LicenseManager.getSavedDeviceId(this);
@@ -143,51 +140,71 @@ public class SetupActivity extends AppCompatActivity {
         }
 
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        etApiKey.setText(prefs.getString("apiKey", ""));
-        etDbUrl.setText(prefs.getString("dbUrl", ""));
-        etProjectId.setText(prefs.getString("projectId", ""));
         etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
         etTvName.setText(prefs.getString("tvName", ""));
 
+        // Tampilkan info Firebase config jika sudah ada dari license
+        TextView tvFbInfo = findViewById(R.id.tvFbInfo);
+        String savedDbUrl = prefs.getString("dbUrl", "");
+        if (tvFbInfo != null) {
+            if (!savedDbUrl.isEmpty()) {
+                tvFbInfo.setText("🔥 Firebase: " + savedDbUrl.replace("https://","").replace(".firebaseio.com","").replace(".firebasedatabase.app",""));
+                tvFbInfo.setVisibility(View.VISIBLE);
+            } else {
+                tvFbInfo.setText("⚠️ Firebase config belum tersedia. Pastikan license key valid.");
+                tvFbInfo.setVisibility(View.VISIBLE);
+            }
+        }
+
         btnConnect.setOnClickListener(v -> connectAndStart());
 
-        if (!prefs.getString("apiKey", "").isEmpty() && hasOverlayPermission()) {
+        String apiKey = prefs.getString("apiKey", "");
+        if (!apiKey.isEmpty() && hasOverlayPermission()) {
             startOverlayService();
             showStatus("Service berjalan | " + deviceId, "#00ff88");
         }
     }
 
     private void connectAndStart() {
-        String apiKey    = etApiKey.getText().toString().trim();
-        String dbUrl     = etDbUrl.getText().toString().trim();
-        String projectId = etProjectId.getText().toString().trim();
-        String tvNumStr  = etTvNum.getText().toString().trim();
-        String tvName    = etTvName.getText().toString().trim();
-
-        if (apiKey.isEmpty() || dbUrl.isEmpty() || projectId.isEmpty()) { showStatus("Semua field wajib diisi!", "#ffcc00"); return; }
-        if (!dbUrl.contains("firebaseio.com") && !dbUrl.contains("firebasedatabase.app")) { showStatus("Database URL tidak valid!", "#ffcc00"); return; }
+        String tvNumStr = etTvNum.getText().toString().trim();
+        String tvName   = etTvName.getText().toString().trim();
 
         int tvNum = 1;
         try { tvNum = Integer.parseInt(tvNumStr); } catch (Exception e) { tvNum = 1; }
         if (tvName.isEmpty()) tvName = "TV " + tvNum;
 
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putString("apiKey", apiKey).putString("dbUrl", dbUrl)
-            .putString("projectId", projectId).putInt("tvNum", tvNum)
-            .putString("tvName", tvName).apply();
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String apiKey    = prefs.getString("apiKey", "");
+        String dbUrl     = prefs.getString("dbUrl", "");
+        String projectId = prefs.getString("projectId", "");
 
+        if (apiKey.isEmpty() || dbUrl.isEmpty()) {
+            showStatus("Firebase config belum tersedia.\nAktifkan license key terlebih dahulu.", "#ffcc00");
+            return;
+        }
+
+        final int finalTvNum   = tvNum;
+        final String finalName = tvName;
+
+        prefs.edit().putInt("tvNum", tvNum).putString("tvName", tvName).apply();
+
+        // Update lastSeen & tvName di license
         String key = LicenseManager.getSavedKey(this);
         if (!key.isEmpty()) {
-            final int fn = tvNum; final String ft = tvName;
-            LicenseManager.verifyAndRegister(this, key, fn, ft, new LicenseManager.LicenseCallback() {
+            LicenseManager.verifyAndRegister(this, key, finalTvNum, finalName, new LicenseManager.LicenseCallback() {
                 @Override public void onValid(String s, String d) {}
                 @Override public void onInvalid(String r) {}
                 @Override public void onError(String m) {}
             });
         }
 
-        if (!hasOverlayPermission()) { showStatus("Butuh izin overlay.", "#ffcc00"); requestOverlayPermission(); }
-        else { startOverlayService(); showStatus("Terhubung! | " + LicenseManager.getSavedDeviceId(this), "#00ff88"); }
+        if (!hasOverlayPermission()) {
+            showStatus("Butuh izin overlay.", "#ffcc00");
+            requestOverlayPermission();
+        } else {
+            startOverlayService();
+            showStatus("Terhubung! | " + LicenseManager.getSavedDeviceId(this), "#00ff88");
+        }
     }
 
     private boolean hasOverlayPermission() {

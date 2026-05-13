@@ -23,6 +23,10 @@ public class LicenseManager {
     private static final String KEY_STATUS      = "tv_license_status";
     private static final String KEY_STORE_ID    = "tv_store_id";
     private static final String KEY_DEVICE_ID   = "tv_device_id";
+    // Firebase config toko — diambil otomatis dari license record
+    private static final String KEY_FB_API_KEY  = "apiKey";
+    private static final String KEY_FB_DB_URL   = "dbUrl";
+    private static final String KEY_FB_PROJ_ID  = "projectId";
 
     public interface LicenseCallback {
         void onValid(String storeId, String deviceId);
@@ -111,12 +115,24 @@ public class LicenseManager {
                         devRef.child("registeredAt").setValue(System.currentTimeMillis());
                         devRef.child("revoked").setValue(false);
                     }
-                    ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    // Ambil Firebase config dari license record → simpan otomatis
+                    DataSnapshot fbCfg = snap.child("firebaseConfig");
+                    String fbApiKey = fbCfg.child("apiKey").getValue(String.class);
+                    String fbDbUrl  = fbCfg.child("databaseURL").getValue(String.class);
+                    String fbProjId = fbCfg.child("projectId").getValue(String.class);
+
+                    SharedPreferences.Editor ed = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                         .putString(KEY_LICENSE, key.trim().toUpperCase())
                         .putString(KEY_STATUS, "active")
                         .putString(KEY_STORE_ID, storeId != null ? storeId : keyHash)
-                        .putString(KEY_DEVICE_ID, deviceId)
-                        .apply();
+                        .putString(KEY_DEVICE_ID, deviceId);
+
+                    // Simpan Firebase config jika tersedia di license
+                    if (fbApiKey != null && !fbApiKey.isEmpty()) ed.putString(KEY_FB_API_KEY, fbApiKey);
+                    if (fbDbUrl  != null && !fbDbUrl.isEmpty())  ed.putString(KEY_FB_DB_URL,  fbDbUrl);
+                    if (fbProjId != null && !fbProjId.isEmpty()) ed.putString(KEY_FB_PROJ_ID, fbProjId);
+                    ed.apply();
+
                     cb.onValid(storeId != null ? storeId : keyHash, deviceId);
                 }
                 @Override public void onCancelled(DatabaseError e) { cb.onError(e.getMessage()); }
