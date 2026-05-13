@@ -220,12 +220,16 @@ public class OverlayService extends Service {
                 }
             };
             sessionRef.addValueEventListener(sessionListener);
-            // Pastikan koneksi tetap aktif dengan keepSynced
             sessionRef.keepSynced(true);
-            // Listen untuk perintah TV dari billing app
             listenTvControl();
-            // Listen nama toko → update idle screen real-time
             listenStoreName();
+
+            // Tandai TV online di Firebase
+            firebaseDb.getReference("settings/tvStatus/" + tvNum)
+                .setValue(new java.util.HashMap<String, Object>() {{
+                    put("online", true);
+                    put("lastSeen", System.currentTimeMillis());
+                }});
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -284,7 +288,7 @@ public class OverlayService extends Service {
 
     // ── WIDGET ─────────────────────────────────────────────────
     private void showWidget() {
-        widgetView.setVisibility(View.VISIBLE);
+        // Widget hanya tampil saat notif 5 menit / 1 menit — tidak langsung visible
         updateWidget();
     }
 
@@ -299,7 +303,9 @@ public class OverlayService extends Service {
             long elapsed = (now - startTime) / 1000;
             secs = Math.max(0, duration - elapsed);
         } else {
-            secs = (now - startTime) / 1000;
+            // Billing mode — tidak tampilkan widget sama sekali
+            widgetView.setVisibility(View.GONE);
+            return;
         }
 
         String timeStr = formatTime(secs);
@@ -309,37 +315,37 @@ public class OverlayService extends Service {
 
         if (tvTime != null) tvTime.setText(timeStr);
 
-        if (isCountdown) {
-            if (secs <= 0) {
-                showExpired();
-                return;
-            } else if (secs <= 60) {
+        if (secs <= 0) {
+            // Waktu habis → tampil fullscreen expired
+            widgetView.setVisibility(View.GONE);
+            showExpired();
+            return;
+        } else if (secs <= 60) {
+            // ≤ 1 menit — tampil terus dengan warna merah
+            widgetView.setVisibility(View.VISIBLE);
+            if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
+            if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
+            if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
+            if (!toast1Shown) {
+                toast1Shown = true;
+            }
+        } else if (secs <= 300) {
+            // ≤ 5 menit — tampil sebentar (10 detik) lalu hilang
+            if (!toast5Shown) {
+                toast5Shown = true;
                 widgetView.setVisibility(View.VISIBLE);
-                if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
-                if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
-                if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
-                if (!toast1Shown) {
-                    toast1Shown = true;
-                }
-            } else if (secs <= 300) {
-                if (!toast5Shown) { widgetView.setVisibility(View.VISIBLE); mainHandler.postDelayed(() -> widgetView.setVisibility(View.GONE), 10000); }
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
                 if (tvLabel != null) tvLabel.setText("SISA WAKTU");
                 if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
-                if (!toast5Shown) {
-                    toast5Shown = true;
-                }
-            } else {
-                widgetView.setVisibility(View.GONE);
-                if (tvTime != null) tvTime.setTextColor(Color.parseColor("#00f5ff"));
-                if (tvLabel != null) tvLabel.setText("SISA WAKTU");
-                if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_normal);
+                mainHandler.postDelayed(() -> {
+                    // Setelah 10 detik sembunyikan (kecuali sudah masuk zona 1 menit)
+                    long remaining = Math.max(0, duration - ((System.currentTimeMillis() - startTime) / 1000));
+                    if (remaining > 60) widgetView.setVisibility(View.GONE);
+                }, 10000);
             }
         } else {
-            // Billing mode
-            if (tvTime != null) tvTime.setTextColor(Color.parseColor("#00f5ff"));
-            if (tvLabel != null) tvLabel.setText("WAKTU MAIN");
-            if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_normal);
+            // > 5 menit — sembunyikan widget
+            widgetView.setVisibility(View.GONE);
         }
     }
 
@@ -508,8 +514,12 @@ public class OverlayService extends Service {
         stopAlarm();
         // Release WakeLock
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-        try {
-            if (widgetView  != null) windowManager.removeView(widgetView);
+        // Tandai TV offline
+        if (firebaseDb != null) {
+            try {
+                firebaseDb.getReference("settings/tvStatus/" + tvNum + "/online").setValue(false);
+            } catch (Exception ignored) {}
+        }
             if (toastView   != null) windowManager.removeView(toastView);
             if (expiredView != null) windowManager.removeView(expiredView);
             if (updateView  != null) windowManager.removeView(updateView);
