@@ -223,6 +223,7 @@ public class OverlayService extends Service {
             sessionRef.keepSynced(true);
             listenTvControl();
             listenStoreName();
+            initTTS();
 
             // Tandai TV online di Firebase
             firebaseDb.getReference("settings/tvStatus/" + tvNum)
@@ -327,6 +328,7 @@ public class OverlayService extends Service {
             if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
             if (!toast1Shown) {
                 toast1Shown = true;
+                speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
             }
         } else if (secs <= 300) {
             // ≤ 5 menit — tampil sebentar (10 detik) lalu hilang
@@ -336,6 +338,7 @@ public class OverlayService extends Service {
                 if (tvTime != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
                 if (tvLabel != null) tvLabel.setText("SISA WAKTU");
                 if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
+                speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
                 mainHandler.postDelayed(() -> {
                     // Setelah 10 detik sembunyikan (kecuali sudah masuk zona 1 menit)
                     long remaining = Math.max(0, duration - ((System.currentTimeMillis() - startTime) / 1000));
@@ -515,6 +518,35 @@ public class OverlayService extends Service {
         stopAlarm();
     }
 
+    // ── TEXT TO SPEECH ─────────────────────────────────────────
+    private android.speech.tts.TextToSpeech tts = null;
+    private boolean ttsReady = false;
+
+    private void initTTS() {
+        try {
+            tts = new android.speech.tts.TextToSpeech(this, status -> {
+                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                    // Gunakan bahasa Indonesia
+                    int result = tts.setLanguage(new java.util.Locale("id", "ID"));
+                    if (result == android.speech.tts.TextToSpeech.LANG_MISSING_DATA ||
+                        result == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
+                        // Fallback ke bahasa default
+                        tts.setLanguage(java.util.Locale.getDefault());
+                    }
+                    tts.setSpeechRate(0.9f);
+                    ttsReady = true;
+                }
+            });
+        } catch (Exception e) {}
+    }
+
+    private void speakWarning(String text) {
+        if (!ttsReady || tts == null) return;
+        try {
+            tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "warning_" + System.currentTimeMillis());
+        } catch (Exception e) {}
+    }
+
     // ── ALARM SOUND ────────────────────────────────────────────
     private void playAlarm() {
         if (alarmPlaying) return;
@@ -584,6 +616,7 @@ public class OverlayService extends Service {
             if (idleView       != null) windowManager.removeView(idleView);
             if (sleepView      != null) windowManager.removeView(sleepView);
         } catch (Exception e) {}
+        if (tts != null) { try { tts.stop(); tts.shutdown(); } catch(Exception ignored){} tts = null; }
         if (globalUpdateRef != null && globalUpdateListener != null)
             globalUpdateRef.removeEventListener(globalUpdateListener);
         if (tvControlRef != null && tvControlListener != null)
