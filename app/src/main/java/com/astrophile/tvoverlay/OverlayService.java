@@ -526,44 +526,26 @@ public class OverlayService extends Service {
                         Boolean enabled = snap.child("enabled").getValue(Boolean.class);
                         if (!Boolean.TRUE.equals(enabled)) return;
 
-                        String minVersion = snap.child("minVersion").getValue(String.class);
-                        String url        = snap.child("url").getValue(String.class);
-                        String message    = snap.child("message").getValue(String.class);
-                        if (minVersion == null || minVersion.isEmpty()) return;
+                        Long releaseTimestamp = snap.child("releaseTimestamp").getValue(Long.class);
+                        String url     = snap.child("url").getValue(String.class);
+                        String message = snap.child("message").getValue(String.class);
+                        if (releaseTimestamp == null) return;
 
-                        // Ambil versi app saat ini
-                        String currentVersion = "";
-                        try {
-                            currentVersion = getPackageManager()
-                                .getPackageInfo(getPackageName(), 0).versionName;
-                        } catch (Exception e) { return; }
-
-                        if (isVersionLower(currentVersion, minVersion)) {
+                        // Bandingkan waktu build APK saat ini dengan waktu rilis
+                        long buildTime = com.astrophile.tvoverlay.BuildConfig.BUILD_TIME;
+                        if (buildTime < releaseTimestamp) {
+                            // APK ini lebih lama dari rilis → paksa update
                             final String fUrl = url != null ? url : "";
                             final String fMsg = message != null ? message : "Pembaruan tersedia. Silakan update aplikasi.";
-                            final String fVer = "Terbaru (" + minVersion + "+)";
+                            final String fVer = "Build: " + new java.text.SimpleDateFormat(
+                                "dd/MM/yy HH:mm", java.util.Locale.getDefault())
+                                .format(new java.util.Date(buildTime));
                             mainHandler.post(() -> showForceUpdate(fVer, fUrl, fMsg));
                         }
                     }
                     @Override public void onCancelled(DatabaseError e) {}
                 });
         } catch (Exception e) {}
-    }
-
-    // Bandingkan versi: "1.1.0" < "1.2.0" → true
-    private boolean isVersionLower(String current, String minimum) {
-        try {
-            String[] c = current.split("[.\\-]");
-            String[] m = minimum.split("[.\\-]");
-            int len = Math.max(c.length, m.length);
-            for (int i = 0; i < len; i++) {
-                int cv = i < c.length ? Integer.parseInt(c[i].replaceAll("[^0-9]","0")) : 0;
-                int mv = i < m.length ? Integer.parseInt(m[i].replaceAll("[^0-9]","0")) : 0;
-                if (cv < mv) return true;
-                if (cv > mv) return false;
-            }
-        } catch (Exception e) {}
-        return false;
     }
 
     private FirebaseApp getMasterApp() {

@@ -111,6 +111,14 @@ public class LicenseManager {
                     devRef.child("tvNum").setValue(tvNum);
                     devRef.child("tvName").setValue(tvName);
                     devRef.child("lastSeen").setValue(System.currentTimeMillis());
+                    // Simpan versi APK saat ini ke Firebase
+                    try {
+                        String buildDate = new java.text.SimpleDateFormat(
+                            "dd/MM/yy HH:mm", java.util.Locale.getDefault())
+                            .format(new java.util.Date(com.astrophile.tvoverlay.BuildConfig.BUILD_TIME));
+                        devRef.child("appVersion").setValue(buildDate);
+                        devRef.child("buildTime").setValue(com.astrophile.tvoverlay.BuildConfig.BUILD_TIME);
+                    } catch (Exception ignored) {}
                     if (!devSnap.exists()) {
                         devRef.child("registeredAt").setValue(System.currentTimeMillis());
                         devRef.child("revoked").setValue(false);
