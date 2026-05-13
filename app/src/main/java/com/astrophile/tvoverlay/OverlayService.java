@@ -520,6 +520,7 @@ public class OverlayService extends Service {
                 firebaseDb.getReference("settings/tvStatus/" + tvNum + "/online").setValue(false);
             } catch (Exception ignored) {}
         }
+        try {
             if (toastView   != null) windowManager.removeView(toastView);
             if (expiredView != null) windowManager.removeView(expiredView);
             if (updateView  != null) windowManager.removeView(updateView);
