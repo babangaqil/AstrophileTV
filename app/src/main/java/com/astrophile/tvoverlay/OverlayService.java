@@ -224,6 +224,8 @@ public class OverlayService extends Service {
             sessionRef.keepSynced(true);
             // Listen untuk perintah TV dari billing app
             listenTvControl();
+            // Listen nama toko → update idle screen real-time
+            listenStoreName();
     }
 
     private void handleFirebaseData(DataSnapshot snapshot) {
@@ -392,7 +394,8 @@ public class OverlayService extends Service {
             try { appVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch(Exception ignored){}
             final String fVer     = appVersion;
             final int    fTvNum   = tvNum;
-            final String fTvName  = (tvName != null && !tvName.isEmpty()) ? tvName.replace("'","") : "TV " + tvNum;
+            final String fTvName  = (!storeName.isEmpty()) ? storeName.replace("'","") :
+                                     (tvName != null && !tvName.isEmpty()) ? tvName.replace("'","") : "TV " + tvNum;
 
             android.webkit.WebView wv = new android.webkit.WebView(this);
             wv.getSettings().setJavaScriptEnabled(true);
@@ -577,6 +580,39 @@ public class OverlayService extends Service {
 
     private com.google.firebase.database.ValueEventListener globalUpdateListener = null;
     private com.google.firebase.database.DatabaseReference  globalUpdateRef      = null;
+
+    private String storeName = "";
+
+    private void listenStoreName() {
+        try {
+            firebaseDb.getReference("settings/namaToko")
+                .addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+                    @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
+                        String name = snap.getValue(String.class);
+                        if (name == null || name.isEmpty()) return;
+                        storeName = name;
+                        namaToko  = name; // sync ke field yang dipakai overlay expired
+
+                        mainHandler.post(() -> {
+                            // Update WebView idle
+                            if (idleView instanceof android.webkit.WebView) {
+                                String safe = name.replace("'", "\\'");
+                                ((android.webkit.WebView) idleView).evaluateJavascript(
+                                    "try{document.querySelectorAll('.sname').forEach(function(el){el.textContent='" + safe + "'})}catch(e){}",
+                                    null
+                                );
+                            }
+                            // Update overlay expired jika sedang tampil
+                            if (expiredView != null && expiredView.getVisibility() == android.view.View.VISIBLE) {
+                                android.widget.TextView tv = expiredView.findViewById(R.id.tvNamaToko);
+                                if (tv != null) tv.setText(name.toUpperCase());
+                            }
+                        });
+                    }
+                    @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
+                });
+        } catch (Exception e) {}
+    }
 
     private com.google.firebase.database.ValueEventListener tvControlListener = null;
     private com.google.firebase.database.DatabaseReference  tvControlRef      = null;
