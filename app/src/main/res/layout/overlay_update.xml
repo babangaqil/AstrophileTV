@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#ee030a18"
+    android:padding="32dp">
+
+    <!-- Icon -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="📲"
+        android:textSize="64sp"
+        android:layout_marginBottom="20dp"/>
+
+    <!-- Judul -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="UPDATE TERSEDIA"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#aa66ff"
+        android:letterSpacing="0.2"
+        android:layout_marginBottom="12dp"/>
+
+    <!-- Versi -->
+    <TextView
+        android:id="@+id/tvUpdateVersion"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Versi terbaru tersedia"
+        android:textSize="14sp"
+        android:textColor="#e8f4ff"
+        android:layout_marginBottom="12dp"/>
+
+    <!-- Pesan -->
+    <TextView
+        android:id="@+id/tvUpdateMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Pembaruan tersedia. Silakan update aplikasi."
+        android:textSize="13sp"
+        android:textColor="#a8c8f0"
+        android:gravity="center"
+        android:lineSpacingMultiplier="1.4"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- Garis -->
+    <View
+        android:layout_width="120dp"
+        android:layout_height="1dp"
+        android:background="#33aa66ff"
+        android:layout_marginBottom="28dp"/>
+
+    <!-- Tombol download -->
+    <Button
+        android:id="@+id/btnUpdate"
+        android:layout_width="wrap_content"
+        android:layout_height="52dp"
+        android:minWidth="200dp"
+        android:text="⬇  DOWNLOAD UPDATE"
+        android:textColor="#aa66ff"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.1"
+        android:background="@drawable/btn_connect_bg"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"/>
+
+    <!-- Info tambahan -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Aplikasi tidak dapat digunakan sebelum diperbarui"
+        android:textSize="10sp"
+        android:textColor="#336688"
+        android:gravity="center"
+        android:layout_marginTop="20dp"/>
+
+</LinearLayout>

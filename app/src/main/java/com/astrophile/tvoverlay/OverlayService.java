@@ -44,6 +44,7 @@ public class OverlayService extends Service {
     private View widgetView;     // Timer kecil di pojok
     private View expiredView;    // Fullscreen waktu habis
     private View toastView;      // Toast notif
+    private View updateView;     // Fullscreen force update
 
     private Handler mainHandler;
     private Timer tickTimer;
@@ -448,9 +449,10 @@ public class OverlayService extends Service {
         // Release WakeLock
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         try {
-            if (widgetView != null)  windowManager.removeView(widgetView);
-            if (toastView != null)   windowManager.removeView(toastView);
+            if (widgetView  != null) windowManager.removeView(widgetView);
+            if (toastView   != null) windowManager.removeView(toastView);
             if (expiredView != null) windowManager.removeView(expiredView);
+            if (updateView  != null) windowManager.removeView(updateView);
         } catch (Exception e) {}
     }
 
@@ -490,12 +492,141 @@ public class OverlayService extends Service {
                             blockOverlay(); return;
                         }
                     }
+                    // ── Cek force update per toko ──
+                    com.google.firebase.database.DataSnapshot fu = snap.child("forceUpdate");
+                    Boolean fuEnabled = fu.child("enabled").getValue(Boolean.class);
+                    if (Boolean.TRUE.equals(fuEnabled)) {
+                        String fuVersion = fu.child("version").getValue(String.class);
+                        String fuUrl     = fu.child("url").getValue(String.class);
+                        String fuMsg     = fu.child("message").getValue(String.class);
+                        mainHandler.post(() -> showForceUpdate(
+                            fuVersion != null ? fuVersion : "Terbaru",
+                            fuUrl     != null ? fuUrl     : "",
+                            fuMsg     != null ? fuMsg     : "Pembaruan tersedia. Silakan update aplikasi."
+                        ));
+                        return; // sudah ditangani, skip global check
+                    }
+                    // ── Cek global update berdasarkan versi ──
+                    checkGlobalUpdate();
                 }
                 @Override
                 public void onCancelled(com.google.firebase.database.DatabaseError e) {}
             };
             licenseRef.addValueEventListener(licenseListener);
         } catch (Exception e) {}
+    }
+
+    private void checkGlobalUpdate() {
+        try {
+            FirebaseDatabase.getInstance(getMasterApp())
+                .getReference("settings/globalUpdate")
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override public void onDataChange(DataSnapshot snap) {
+                        if (!snap.exists()) return;
+                        Boolean enabled = snap.child("enabled").getValue(Boolean.class);
+                        if (!Boolean.TRUE.equals(enabled)) return;
+
+                        String minVersion = snap.child("minVersion").getValue(String.class);
+                        String url        = snap.child("url").getValue(String.class);
+                        String message    = snap.child("message").getValue(String.class);
+                        if (minVersion == null || minVersion.isEmpty()) return;
+
+                        // Ambil versi app saat ini
+                        String currentVersion = "";
+                        try {
+                            currentVersion = getPackageManager()
+                                .getPackageInfo(getPackageName(), 0).versionName;
+                        } catch (Exception e) { return; }
+
+                        if (isVersionLower(currentVersion, minVersion)) {
+                            final String fUrl = url != null ? url : "";
+                            final String fMsg = message != null ? message : "Pembaruan tersedia. Silakan update aplikasi.";
+                            final String fVer = "Terbaru (" + minVersion + "+)";
+                            mainHandler.post(() -> showForceUpdate(fVer, fUrl, fMsg));
+                        }
+                    }
+                    @Override public void onCancelled(DatabaseError e) {}
+                });
+        } catch (Exception e) {}
+    }
+
+    // Bandingkan versi: "1.1.0" < "1.2.0" → true
+    private boolean isVersionLower(String current, String minimum) {
+        try {
+            String[] c = current.split("[.\\-]");
+            String[] m = minimum.split("[.\\-]");
+            int len = Math.max(c.length, m.length);
+            for (int i = 0; i < len; i++) {
+                int cv = i < c.length ? Integer.parseInt(c[i].replaceAll("[^0-9]","0")) : 0;
+                int mv = i < m.length ? Integer.parseInt(m[i].replaceAll("[^0-9]","0")) : 0;
+                if (cv < mv) return true;
+                if (cv > mv) return false;
+            }
+        } catch (Exception e) {}
+        return false;
+    }
+
+    private FirebaseApp getMasterApp() {
+        try { return FirebaseApp.getInstance("_tv_license"); }
+        catch (Exception e) {
+            return FirebaseApp.initializeApp(this, new com.google.firebase.FirebaseOptions.Builder()
+                .setApiKey("AIzaSyD8XffAZK8JUOBajCUVyPS-NT9jnwYBats")
+                .setDatabaseUrl("https://astrophile-rental-default-rtdb.firebaseio.com")
+                .setProjectId("astrophile-rental")
+                .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
+                .build(), "_tv_license");
+        }
+    }
+
+    private void showForceUpdate(String version, String url, String message) {
+        // Sembunyikan semua overlay lain
+        if (widgetView  != null) widgetView.setVisibility(android.view.View.GONE);
+        if (toastView   != null) toastView.setVisibility(android.view.View.GONE);
+        if (expiredView != null) expiredView.setVisibility(android.view.View.GONE);
+        stopAlarm();
+
+        // Tampilkan layar force update fullscreen
+        if (updateView != null) {
+            try { windowManager.removeView(updateView); } catch (Exception ignored) {}
+            updateView = null;
+        }
+
+        android.view.LayoutInflater inflater = android.view.LayoutInflater.from(this);
+        updateView = inflater.inflate(R.layout.overlay_update, null);
+
+        android.widget.TextView tvVersion = updateView.findViewById(R.id.tvUpdateVersion);
+        android.widget.TextView tvMessage = updateView.findViewById(R.id.tvUpdateMessage);
+        android.widget.Button   btnUpdate = updateView.findViewById(R.id.btnUpdate);
+
+        if (tvVersion != null) tvVersion.setText("Versi " + version + " tersedia");
+        if (tvMessage != null) tvMessage.setText(message);
+        if (btnUpdate != null) {
+            btnUpdate.setOnClickListener(v -> {
+                if (!url.isEmpty()) {
+                    try {
+                        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(url));
+                        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(i);
+                    } catch (Exception e) {}
+                }
+            });
+        }
+
+        int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
+            ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            : android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
+
+        android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType,
+            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+            android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+            android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            android.graphics.PixelFormat.TRANSLUCENT
+        );
+        windowManager.addView(updateView, params);
     }
 
     private void blockOverlay() {
