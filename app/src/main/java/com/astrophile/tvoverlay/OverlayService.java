@@ -268,7 +268,6 @@ public class OverlayService extends Service {
             } else {
                 isActive = false;
                 hideAll();
-                showIdle();
             }
         });
     }
@@ -363,34 +362,90 @@ public class OverlayService extends Service {
     }
 
     // ── EXPIRED ────────────────────────────────────────────────
+    private android.webkit.WebView expiredWebView = null;
+
     private void showExpired() {
         if (isExpired) return;
-        isExpired  = true;
-        isActive   = false;
+        isExpired   = true;
+        isActive    = false;
         toast5Shown = false;
         toast1Shown = false;
 
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
+        expiredView.setVisibility(View.GONE); // sembunyikan XML lama
 
-        TextView tvNamaTokoView = expiredView.findViewById(R.id.tvNamaToko);
-        if (tvNamaTokoView != null) tvNamaTokoView.setText(namaToko.isEmpty() ? "ASTROPHILE" : namaToko.toUpperCase());
-        TextView tvName2  = expiredView.findViewById(R.id.tvExpiredName);
-        TextView tvTv     = expiredView.findViewById(R.id.tvExpiredTV);
+        // Buat WebView overlay untuk expired
+        if (expiredWebView != null) {
+            expiredWebView.setVisibility(android.view.View.VISIBLE);
+            injectExpiredData(expiredWebView);
+            return;
+        }
 
-        if (tvName2 != null) tvName2.setText(
-            namaPelanggan.isEmpty() ? "" : namaPelanggan.toUpperCase()
-        );
-        if (tvTv != null) tvTv.setText(tvName);
+        try {
+            android.webkit.WebView wv = new android.webkit.WebView(this);
+            wv.getSettings().setJavaScriptEnabled(true);
+            wv.getSettings().setDomStorageEnabled(true);
+            wv.getSettings().setBuiltInZoomControls(false);
+            wv.getSettings().setDisplayZoomControls(false);
+            wv.setBackgroundColor(android.graphics.Color.BLACK);
 
-        expiredView.setVisibility(View.VISIBLE);
+            final String fStoreName    = (namaToko.isEmpty() ? "ASTROPHILE" : namaToko).replace("'", "\\'");
+            final String fCustomerName = namaPelanggan.isEmpty() ? "" : namaPelanggan.toUpperCase().replace("'", "\\'");
+            final String fTvName       = tvName.replace("'", "\\'");
+            final String fMode         = mode != null ? mode.toUpperCase() : "PS";
+
+            wv.setWebViewClient(new android.webkit.WebViewClient() {
+                @Override
+                public void onPageFinished(android.webkit.WebView view, String url) {
+                    injectExpiredData(view);
+                }
+            });
+            wv.loadUrl("file:///android_asset/expired.html");
+
+            int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
+                ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
+
+            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams(
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                overlayType,
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                android.graphics.PixelFormat.OPAQUE
+            );
+            lp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
+
+            expiredWebView = wv;
+            windowManager.addView(expiredWebView, lp);
+        } catch (Exception e) {}
 
         playAlarm();
+    }
+
+    private void injectExpiredData(android.webkit.WebView view) {
+        String storeName    = (namaToko.isEmpty() ? "ASTROPHILE" : namaToko).replace("'", "\\'");
+        String customerName = namaPelanggan.isEmpty() ? "-" : namaPelanggan.toUpperCase().replace("'", "\\'");
+        String tvNum_str    = "TV " + tvNum;
+        String modeStr      = mode != null ? mode.toUpperCase() : "PS";
+
+        view.evaluateJavascript(
+            "try{" +
+            "  var sn=document.querySelectorAll('.store-name');" +
+            "  sn.forEach(function(el){el.textContent='" + storeName + "'});" +
+            "  var cn=document.querySelectorAll('.name');" +
+            "  cn.forEach(function(el){el.textContent='" + customerName + "'});" +
+            "  var tv=document.querySelectorAll('.tvrow');" +
+            "  tv.forEach(function(el){el.textContent='" + tvNum_str + " \\u00b7 " + modeStr + "'});" +
+            "}catch(e){}", null
+        );
     }
 
     private void hideExpired() {
         isExpired = false;
         expiredView.setVisibility(View.GONE);
+        if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
         stopAlarm();
     }
 
@@ -521,11 +576,13 @@ public class OverlayService extends Service {
             } catch (Exception ignored) {}
         }
         try {
-            if (toastView   != null) windowManager.removeView(toastView);
-            if (expiredView != null) windowManager.removeView(expiredView);
-            if (updateView  != null) windowManager.removeView(updateView);
-            if (idleView    != null) windowManager.removeView(idleView);
-            if (sleepView   != null) windowManager.removeView(sleepView);
+            if (widgetView     != null) windowManager.removeView(widgetView);
+            if (toastView      != null) windowManager.removeView(toastView);
+            if (expiredView    != null) windowManager.removeView(expiredView);
+            if (expiredWebView != null) windowManager.removeView(expiredWebView);
+            if (updateView     != null) windowManager.removeView(updateView);
+            if (idleView       != null) windowManager.removeView(idleView);
+            if (sleepView      != null) windowManager.removeView(sleepView);
         } catch (Exception e) {}
         if (globalUpdateRef != null && globalUpdateListener != null)
             globalUpdateRef.removeEventListener(globalUpdateListener);
@@ -617,7 +674,11 @@ public class OverlayService extends Service {
                                     null
                                 );
                             }
-                            // Update overlay expired jika sedang tampil
+                            // Update WebView expired jika sedang tampil
+                            if (expiredWebView != null && expiredWebView.getVisibility() == android.view.View.VISIBLE) {
+                                injectExpiredData(expiredWebView);
+                            }
+                            // Update overlay expired XML jika sedang tampil (fallback)
                             if (expiredView != null && expiredView.getVisibility() == android.view.View.VISIBLE) {
                                 android.widget.TextView tv = expiredView.findViewById(R.id.tvNamaToko);
                                 if (tv != null) tv.setText(name.toUpperCase());

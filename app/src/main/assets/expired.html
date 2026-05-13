@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+
+.frame{
+  width:100%;max-width:920px;aspect-ratio:16/9;
+  position:relative;overflow:hidden;border-radius:8px;background:#000;
+  box-shadow:0 0 80px rgba(0,0,0,0.95),0 0 0 1px rgba(255,0,20,0.12);
+}
+
+.bg-radial{position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 50%,rgba(100,0,8,0.20) 0%,transparent 60%),
+    radial-gradient(ellipse 100% 100% at 50% 50%,transparent 28%,rgba(0,0,0,0.85) 100%);
+  animation:breathe 3s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.7}50%{opacity:1}}
+
+.noise{position:absolute;inset:0;opacity:.035;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:180px}
+
+.scan{position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.09) 2px,rgba(0,0,0,0.09) 3px)}
+
+/* Particles + meteors canvas */
+.canvas-bg{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}
+.canvas-meteor{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+
+/* Top sweep line */
+.sweep{position:absolute;top:0;left:0;right:0;height:2px;z-index:8;
+  background:linear-gradient(90deg,transparent 5%,#ff0020 28%,#ff6040 50%,#ff0020 72%,transparent 95%);
+  background-size:200% 100%;animation:sw 4s linear infinite;
+  box-shadow:0 0 18px rgba(255,0,20,.8)}
+@keyframes sw{0%{background-position:110% 0}100%{background-position:-110% 0}}
+
+.sweep-bot{position:absolute;bottom:0;left:0;right:0;height:1.5px;z-index:8;
+  background:linear-gradient(90deg,transparent 10%,rgba(255,0,20,.4) 50%,transparent 90%)}
+
+/* Store name — TOP */
+.store{position:absolute;top:clamp(16px,3%,30px);left:0;right:0;text-align:center;z-index:10}
+.store-name{
+  font-family:'Orbitron',monospace;
+  font-size:clamp(17px,3vw,36px);font-weight:900;
+  letter-spacing:clamp(6px,1.5vw,18px);text-transform:uppercase;
+  background:linear-gradient(90deg,
+    #ff0020,#ff6040,#ffffff,#ff6040,#ff0020,
+    #ff6040,#ffffff,#ff6040,#ff0020
+  );
+  background-size:400% 100%;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:storeAurora 5s linear infinite, storeGlitch 7s steps(1) infinite;
+  filter:drop-shadow(0 0 14px rgba(255,0,20,.7)) drop-shadow(0 0 30px rgba(255,0,20,.3));
+}
+@keyframes storeAurora{0%{background-position:0%}100%{background-position:400%}}
+@keyframes storeGlitch{
+  0%,90%,100%{filter:drop-shadow(0 0 14px rgba(255,0,20,.7)) drop-shadow(0 0 30px rgba(255,0,20,.3))}
+  91%{filter:drop-shadow(-3px 0 rgba(0,200,255,.8)) drop-shadow(3px 0 rgba(255,0,80,.8)) drop-shadow(0 0 20px rgba(255,0,20,.5))}
+  92%{filter:drop-shadow(3px 0 rgba(0,200,255,.8)) drop-shadow(-3px 0 rgba(255,0,80,.8)) drop-shadow(0 0 20px rgba(255,0,20,.5))}
+  93%{filter:drop-shadow(0 0 14px rgba(255,0,20,.7)) drop-shadow(0 0 30px rgba(255,0,20,.3))}
+}
+.store-line{width:clamp(50px,10%,100px);height:1.5px;margin:clamp(6px,1%,10px) auto 0;
+  background:linear-gradient(90deg,transparent,rgba(255,0,20,.55),transparent);
+  box-shadow:0 0 8px rgba(255,0,20,.4)}
+
+/* MAIN CONTENT — horizontal split */
+.content{
+  position:absolute;
+  top:clamp(60px,18%,110px);bottom:clamp(30px,7%,55px);
+  left:0;right:0;
+  display:flex;align-items:center;justify-content:center;
+  gap:clamp(16px,3%,48px);
+  padding:0 clamp(20px,4%,50px);
+  z-index:7;
+}
+
+/* Left: lock */
+.lock-col{display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2%,12px);flex-shrink:0}
+.lock-icon{
+  font-size:clamp(44px,9vw,110px);
+  animation:holoFloat 3s ease-in-out infinite;
+  filter:drop-shadow(0 0 20px rgba(255,0,20,.9)) drop-shadow(0 0 40px rgba(255,0,20,.4));
+}
+@keyframes holoFloat{
+  0%,100%{transform:translateY(0) scale(1);filter:drop-shadow(0 0 20px rgba(255,0,20,.9)) drop-shadow(0 0 40px rgba(255,0,20,.4))}
+  50%{transform:translateY(-8px) scale(1.05);filter:drop-shadow(0 0 30px rgba(255,0,20,1)) drop-shadow(0 0 60px rgba(255,0,20,.6))}
+}
+.lock-label{font-family:'Orbitron',monospace;font-size:clamp(6px,.75vw,9px);color:rgba(255,60,60,.45);letter-spacing:2px}
+
+/* Vertical divider */
+.vdiv{width:1px;height:clamp(50px,14%,100px);
+  background:linear-gradient(to bottom,transparent,rgba(255,0,20,.25),transparent);
+  flex-shrink:0}
+
+/* Right: info */
+.info-col{display:flex;flex-direction:column;gap:clamp(3px,.5%,6px)}
+.label{
+  font-family:'Orbitron',monospace;
+  font-size:clamp(20px,4vw,52px);font-weight:900;
+  color:#ff0020;letter-spacing:clamp(2px,.6vw,8px);
+  text-shadow:0 0 20px rgba(255,0,20,1),0 0 55px rgba(200,0,20,.5);
+  animation:gl 5s steps(1) infinite;
+}
+@keyframes gl{
+  0%,87%,100%{transform:none;filter:none}
+  88%{transform:translate(-2px,0) skewX(-3deg);filter:drop-shadow(-3px 0 rgba(0,200,255,.7)) drop-shadow(3px 0 rgba(255,0,80,.7))}
+  89%{transform:translate(2px,0);filter:drop-shadow(3px 0 rgba(0,200,255,.7)) drop-shadow(-3px 0 rgba(255,0,80,.7))}
+  90%{transform:none;filter:none}
+}
+.sub{font-family:'Rajdhani',sans-serif;font-size:clamp(8px,.9vw,12px);color:rgba(255,80,80,.45);letter-spacing:4px}
+.h-line{width:100%;height:1.5px;
+  background:linear-gradient(90deg,rgba(255,0,20,.35),transparent);
+  margin:clamp(8px,1.5%,14px) 0}
+.name{font-family:'Orbitron',monospace;font-size:clamp(14px,2.8vw,36px);font-weight:900;color:#fff;letter-spacing:3px}
+.tvrow{font-family:'Rajdhani',sans-serif;font-size:clamp(8px,1vw,12px);color:rgba(255,80,80,.45);letter-spacing:4px}
+.hub{font-family:'Rajdhani',sans-serif;font-size:clamp(8px,.9vw,11px);color:rgba(255,60,60,.40);
+  letter-spacing:2px;margin-top:clamp(6px,1.2%,12px);font-weight:600;
+  animation:fi 3s ease-in-out infinite}
+@keyframes fi{0%,100%{opacity:.38}50%{opacity:.80}}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="bg-radial"></div>
+  <div class="noise"></div>
+  <div class="scan"></div>
+
+  <!-- Layer 1: floating particles -->
+  <canvas id="cp" class="canvas-bg"></canvas>
+  <!-- Layer 2: meteor shower -->
+  <canvas id="cm" class="canvas-meteor"></canvas>
+
+  <div class="sweep"></div>
+  <div class="sweep-bot"></div>
+
+  <!-- Store name top -->
+  <div class="store">
+    <div class="store-name">GEMBOX PS</div>
+    <div class="store-line"></div>
+  </div>
+
+  <!-- Main content -->
+  <div class="content">
+    <div class="lock-col">
+      <div class="lock-icon">🔒</div>
+      <div class="lock-label">AKSES DIBLOKIR</div>
+    </div>
+    <div class="vdiv"></div>
+    <div class="info-col">
+      <div class="label">WAKTU HABIS</div>
+      <div class="sub">SESSION BERAKHIR</div>
+      <div class="h-line"></div>
+      <div class="name">BUDI SANTOSO</div>
+      <div class="tvrow">TV 1 &nbsp;·&nbsp; PS4</div>
+      <div class="hub">⚡ Hubungi operator</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Floating red particles ──
+;(function(){
+  const c=document.getElementById('cp')
+  if(!c)return
+  const ctx=c.getContext('2d')
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width||400;c.height=r.height||225}
+  resize()
+  const pts=Array.from({length:28},()=>({
+    x:Math.random()*c.width,y:Math.random()*c.height,
+    r:Math.random()*1.4+0.3,
+    vx:(Math.random()-.5)*.18,vy:(Math.random()-.5)*.18,
+    a:Math.random()*.5+.12,ph:Math.random()*Math.PI*2
+  }))
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height)
+    pts.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.ph+=.015
+      if(p.x<0)p.x=c.width;if(p.x>c.width)p.x=0
+      if(p.y<0)p.y=c.height;if(p.y>c.height)p.y=0
+      const a=p.a*(.4+.6*Math.abs(Math.sin(p.ph)))
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2)
+      ctx.fillStyle=`rgba(255,20,20,${a})`
+      ctx.shadowColor='#ff0020';ctx.shadowBlur=p.r>1?8:3;ctx.fill()
+    })
+    for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+      const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,d=Math.sqrt(dx*dx+dy*dy)
+      if(d<60){ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.strokeStyle=`rgba(255,0,20,${.05*(1-d/60)})`;ctx.lineWidth=.5;ctx.shadowBlur=0;ctx.stroke()}
+    }
+    requestAnimationFrame(draw)
+  }
+  resize();draw();window.addEventListener('resize',resize)
+})()
+
+// ── Meteor shower ──
+;(function(){
+  const c=document.getElementById('cm')
+  if(!c)return
+  const ctx=c.getContext('2d')
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width||400;c.height=r.height||225}
+  resize()
+
+  let meteors=[]
+
+  function spawnMeteor(){
+    const x=Math.random()*c.width*1.5-c.width*0.2
+    meteors.push({
+      x,y:-10,
+      vx:c.width*(Math.random()*.008+.005),
+      vy:c.height*(Math.random()*.012+.008),
+      len:Math.random()*70+40,
+      alpha:1,
+      w:Math.random()*1.4+0.5,
+      red:Math.random()>.3 // mostly red, some white
+    })
+  }
+
+  function schedule(){
+    setTimeout(()=>{
+      spawnMeteor()
+      if(Math.random()>.5) setTimeout(spawnMeteor,200)
+      schedule()
+    },Math.random()*2500+1800)
+  }
+  schedule()
+
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height)
+    meteors=meteors.filter(m=>{
+      const angle=Math.atan2(m.vy,m.vx)
+      const grad=ctx.createLinearGradient(
+        m.x-Math.cos(angle)*m.len, m.y-Math.sin(angle)*m.len,
+        m.x, m.y
+      )
+      const col=m.red?`255,0,20`:`255,120,100`
+      grad.addColorStop(0,`rgba(${col},0)`)
+      grad.addColorStop(.6,`rgba(${col},${m.alpha*.3})`)
+      grad.addColorStop(1,`rgba(${col},${m.alpha})`)
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.moveTo(m.x-Math.cos(angle)*m.len, m.y-Math.sin(angle)*m.len)
+      ctx.lineTo(m.x,m.y)
+      ctx.strokeStyle=grad
+      ctx.lineWidth=m.w
+      ctx.lineCap='round'
+      ctx.shadowColor=m.red?'#ff0020':'#ff6040'
+      ctx.shadowBlur=6
+      ctx.stroke()
+
+      // Head dot
+      ctx.beginPath();ctx.arc(m.x,m.y,m.w*.9,0,Math.PI*2)
+      ctx.fillStyle=`rgba(255,255,255,${m.alpha})`
+      ctx.shadowBlur=10;ctx.fill()
+      ctx.restore()
+
+      m.x+=m.vx;m.y+=m.vy;m.alpha-=.012
+      return m.alpha>0&&m.y<c.height+20&&m.x<c.width+50
+    })
+    requestAnimationFrame(draw)
+  }
+  resize();draw();window.addEventListener('resize',resize)
+})()
+</script>
+</body>
+</html>
