@@ -34,12 +34,70 @@ public class LicenseManager {
         void onError(String msg);
     }
 
-    public static String generateDeviceId(Context ctx, int tvNum) {
+    private static final String KEY_HW_ID = "tv_hardware_id";
+
+    /**
+     * Dapatkan hardware ID yang PERMANEN — tidak berubah meski uninstall/reinstall.
+     * Strategi: simpan ke file eksternal + SharedPreferences.
+     * Saat install ulang: baca dari file eksternal → restore ke SharedPreferences.
+     */
+    public static String getOrCreateHardwareId(Context ctx) {
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+
+        // 1. Cek file eksternal dulu (persist setelah uninstall)
+        String savedId = readHwIdFromFile(ctx);
+        if (savedId != null && !savedId.isEmpty()) {
+            // Restore ke SharedPreferences juga
+            prefs.edit().putString(KEY_HW_ID, savedId).apply();
+            return savedId;
+        }
+
+        // 2. Cek SharedPreferences
+        savedId = prefs.getString(KEY_HW_ID, "");
+        if (!savedId.isEmpty()) {
+            writeHwIdToFile(ctx, savedId);
+            return savedId;
+        }
+
+        // 3. Generate baru dari ANDROID_ID
         String androidId = Settings.Secure.getString(
             ctx.getContentResolver(), Settings.Secure.ANDROID_ID);
         if (androidId == null || androidId.isEmpty()) androidId = "UNKNOWN";
-        return "TV-" + String.format("%03d", tvNum) + "-" +
-            androidId.substring(0, Math.min(6, androidId.length())).toUpperCase();
+        String hwId = androidId.substring(0, Math.min(6, androidId.length())).toUpperCase();
+
+        // Simpan ke kedua tempat
+        prefs.edit().putString(KEY_HW_ID, hwId).apply();
+        writeHwIdToFile(ctx, hwId);
+        return hwId;
+    }
+
+    private static String readHwIdFromFile(Context ctx) {
+        try {
+            java.io.File dir = ctx.getExternalFilesDir(null);
+            if (dir == null) return null;
+            java.io.File f = new java.io.File(dir, ".astro_hwid");
+            if (!f.exists()) return null;
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+            String id = r.readLine();
+            r.close();
+            return (id != null) ? id.trim() : null;
+        } catch (Exception e) { return null; }
+    }
+
+    private static void writeHwIdToFile(Context ctx, String hwId) {
+        try {
+            java.io.File dir = ctx.getExternalFilesDir(null);
+            if (dir == null) return;
+            java.io.File f = new java.io.File(dir, ".astro_hwid");
+            java.io.FileWriter w = new java.io.FileWriter(f);
+            w.write(hwId);
+            w.close();
+        } catch (Exception ignored) {}
+    }
+
+    public static String generateDeviceId(Context ctx, int tvNum) {
+        String hwId = getOrCreateHardwareId(ctx);
+        return "TV-" + String.format("%03d", tvNum) + "-" + hwId;
     }
 
     public static String getSavedKey(Context ctx) {
