@@ -743,6 +743,13 @@ public class OverlayService extends Service {
                                 hideAll();
                                 showIdle();
                                 break;
+                            case "idle_off":
+                                // Sembunyikan idle screen
+                                if (idleView != null) {
+                                    try { windowManager.removeView(idleView); } catch(Exception ignored){}
+                                    idleView = null;
+                                }
+                                break;
                             case "sleep":
                                 showSleep();
                                 break;
