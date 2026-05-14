@@ -103,6 +103,21 @@ public class LicenseManager {
                     if (expiredAt != null && System.currentTimeMillis() > expiredAt) {
                         saveStatus(ctx, "expired"); cb.onInvalid("EXPIRED"); return;
                     }
+                    // Hapus entry lama jika device ini pernah register dengan nomor TV berbeda
+                    // Hardware ID = 6 karakter terakhir dari deviceId (misal: 048ABA)
+                    String hwSuffix = deviceId.length() >= 6
+                        ? deviceId.substring(deviceId.length() - 6)
+                        : deviceId;
+                    DataSnapshot allDevices = snap.child("devices");
+                    for (DataSnapshot existing : allDevices.getChildren()) {
+                        String existingId = existing.getKey();
+                        if (existingId != null && !existingId.equals(deviceId)
+                            && existingId.endsWith(hwSuffix)) {
+                            // Device ID lama dengan hardware yang sama — hapus
+                            keyRef.child("devices").child(existingId).removeValue();
+                        }
+                    }
+
                     DataSnapshot devSnap = snap.child("devices").child(deviceId);
                     if (devSnap.exists() && Boolean.TRUE.equals(devSnap.child("revoked").getValue(Boolean.class))) {
                         saveStatus(ctx, "device_revoked"); cb.onInvalid("DEVICE_REVOKED"); return;
