@@ -492,6 +492,87 @@ public class OverlayService extends Service {
         } catch (Exception e) {}
     }
 
+    // ── OTA AUTO UPDATE ───────────────────────────────────────
+    private static final String APK_URL =
+        "https://github.com/babangaqil/AstrophileTV/releases/latest/download/AstrophileTV.apk";
+
+    private void checkAndDownloadUpdate(String latestVersion) {
+        try {
+            String currentVersion = getPackageManager()
+                .getPackageInfo(getPackageName(), 0).versionName;
+
+            if (isNewerVersion(latestVersion, currentVersion)) {
+                mainHandler.post(() -> showUpdateNotification(latestVersion));
+                downloadAndInstallApk();
+            }
+        } catch (Exception e) {}
+    }
+
+    private boolean isNewerVersion(String latest, String current) {
+        try {
+            String[] l = latest.replace("v","").split("\\.");
+            String[] c = current.replace("v","").split("\\.");
+            for (int i = 0; i < Math.max(l.length, c.length); i++) {
+                int lv = i < l.length ? Integer.parseInt(l[i]) : 0;
+                int cv = i < c.length ? Integer.parseInt(c[i]) : 0;
+                if (lv > cv) return true;
+                if (lv < cv) return false;
+            }
+        } catch (Exception e) {}
+        return false;
+    }
+
+    private void showUpdateNotification(String version) {
+        if (updateView != null) return;
+        // Tampilkan info update di overlay kecil
+        android.widget.Toast.makeText(this,
+            "Update v" + version + " tersedia, sedang download...",
+            android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    private void downloadAndInstallApk() {
+        new Thread(() -> {
+            try {
+                java.net.URL url = new java.net.URL(APK_URL);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setInstanceFollowRedirects(true);
+                conn.connect();
+
+                java.io.File apkFile = new java.io.File(getExternalFilesDir(null), "AstrophileTV_update.apk");
+                java.io.InputStream input = conn.getInputStream();
+                java.io.FileOutputStream output = new java.io.FileOutputStream(apkFile);
+
+                byte[] buffer = new byte[4096];
+                int len;
+                while ((len = input.read(buffer)) != -1) output.write(buffer, 0, len);
+
+                output.close();
+                input.close();
+                conn.disconnect();
+
+                mainHandler.post(() -> installApk(apkFile));
+            } catch (Exception e) {}
+        }).start();
+    }
+
+    private void installApk(java.io.File apkFile) {
+        try {
+            android.net.Uri apkUri;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                apkUri = androidx.core.content.FileProvider.getUriForFile(
+                    this, "com.astrophile.tvoverlay.fileprovider", apkFile);
+            } else {
+                apkUri = android.net.Uri.fromFile(apkFile);
+            }
+
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK |
+                           android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(intent);
+        } catch (Exception e) {}
+    }
+
     // ── ALARM SOUND ────────────────────────────────────────────
     private void playAlarm() {
         if (alarmPlaying) return;
@@ -757,9 +838,11 @@ public class OverlayService extends Service {
                     } catch (Exception e) { return; }
 
                     if (isVersionLower(currentVersion, minVersion)) {
-                        final String fUrl = url != null ? url : "";
-                        final String fMsg = message != null ? message : "Pembaruan tersedia. Silakan update aplikasi.";
+                        final String fUrl = url != null ? url : APK_URL;
+                        final String fMsg = message != null ? message : "Pembaruan tersedia. Sedang download...";
                         final String fVer = "v" + minVersion;
+                        // Auto download OTA
+                        checkAndDownloadUpdate(minVersion);
                         mainHandler.post(() -> showForceUpdate(fVer, fUrl, fMsg));
                     }
                 }
