@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,7 +31,6 @@ jobs:
       - name: Decode Keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/astrophile.keystore
-          ls -la $GITHUB_WORKSPACE/astrophile.keystore
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
@@ -43,17 +45,28 @@ jobs:
             -keypass ${{ secrets.KEY_PASSWORD }} \
             app/build/outputs/apk/release/app-release-unsigned.apk \
             ${{ secrets.KEY_ALIAS }}
-          
-          # Rename to signed
           mv app/build/outputs/apk/release/app-release-unsigned.apk \
-             app/build/outputs/apk/release/app-release-signed.apk
+             app/build/outputs/apk/release/AstrophileTV.apk
 
-      - name: Find APK
-        run: find app/build/outputs/apk -name "*.apk" 2>/dev/null
+      - name: Get Version
+        id: version
+        run: |
+          VERSION=$(grep versionName app/build.gradle | awk '{print $2}' | tr -d '"')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
 
-      - name: Upload APK
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: AstrophileTV v${{ steps.version.outputs.version }}
+          body: "APK terbaru AstrophileTV siap diinstall."
+          files: app/build/outputs/apk/release/AstrophileTV.apk
+          make_latest: true
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AstrophileTV-APK
-          path: app/build/outputs/apk/release/app-release-signed.apk
+          path: app/build/outputs/apk/release/AstrophileTV.apk
           retention-days: 30
