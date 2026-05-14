@@ -452,60 +452,6 @@ public class OverlayService extends Service {
         stopAlarm();
     }
 
-    private View idleView = null;  // Badge TERSEDIA di pojok
-
-    private void showIdle() {
-        if (updateView != null) return;
-        if (idleView != null) { idleView.setVisibility(android.view.View.VISIBLE); return; }
-        try {
-            String appVersion = "1.0";
-            try { appVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch(Exception ignored){}
-            final String fVer     = appVersion;
-            final int    fTvNum   = tvNum;
-            final String fTvName  = (!storeName.isEmpty()) ? storeName.replace("'","") :
-                                     (tvName != null && !tvName.isEmpty()) ? tvName.replace("'","") : "TV " + tvNum;
-
-            android.webkit.WebView wv = new android.webkit.WebView(this);
-            wv.getSettings().setJavaScriptEnabled(true);
-            wv.getSettings().setDomStorageEnabled(true);
-            wv.getSettings().setBuiltInZoomControls(false);
-            wv.getSettings().setDisplayZoomControls(false);
-            wv.setBackgroundColor(android.graphics.Color.BLACK);
-
-            wv.setWebViewClient(new android.webkit.WebViewClient(){
-                @Override
-                public void onPageFinished(android.webkit.WebView view, String url){
-                    // Inject nama toko, nomor TV, versi APK
-                    view.evaluateJavascript(
-                        "try{" +
-                        "  document.querySelectorAll('.sname').forEach(function(el){el.textContent='" + fTvName + "'});" +
-                        "  document.querySelectorAll('.tv-name').forEach(function(el){el.textContent='TV " + fTvNum + "'});" +
-                        "  document.querySelectorAll('.tv-pow').forEach(function(el){el.innerHTML='Powered by <em>ASTROPHILE</em> \\u00b7 v" + fVer + "'});" +
-                        "}catch(e){}", null
-                    );
-                }
-            });
-            wv.loadUrl("file:///android_asset/idle.html");
-
-            int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
-                ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
-
-            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams(
-                android.view.WindowManager.LayoutParams.MATCH_PARENT,
-                android.view.WindowManager.LayoutParams.MATCH_PARENT,
-                overlayType,
-                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                android.graphics.PixelFormat.OPAQUE
-            );
-            lp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
-
-            idleView = wv;
-            windowManager.addView(idleView, lp);
-        } catch (Exception e) {}
-    }
-
     private void hideAll() {
         isActive  = false;
         isExpired = false;
@@ -514,7 +460,6 @@ public class OverlayService extends Service {
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
-        if (idleView != null) idleView.setVisibility(android.view.View.GONE);
         stopAlarm();
     }
 
@@ -613,7 +558,6 @@ public class OverlayService extends Service {
             if (expiredView    != null) windowManager.removeView(expiredView);
             if (expiredWebView != null) windowManager.removeView(expiredWebView);
             if (updateView     != null) windowManager.removeView(updateView);
-            if (idleView       != null) windowManager.removeView(idleView);
             if (sleepView      != null) windowManager.removeView(sleepView);
         } catch (Exception e) {}
         if (tts != null) { try { tts.stop(); tts.shutdown(); } catch(Exception ignored){} tts = null; }
@@ -699,14 +643,6 @@ public class OverlayService extends Service {
                         namaToko  = name; // sync ke field yang dipakai overlay expired
 
                         mainHandler.post(() -> {
-                            // Update WebView idle
-                            if (idleView instanceof android.webkit.WebView) {
-                                String safe = name.replace("'", "\\'");
-                                ((android.webkit.WebView) idleView).evaluateJavascript(
-                                    "try{document.querySelectorAll('.sname').forEach(function(el){el.textContent='" + safe + "'})}catch(e){}",
-                                    null
-                                );
-                            }
                             // Update WebView expired jika sedang tampil
                             if (expiredWebView != null && expiredWebView.getVisibility() == android.view.View.VISIBLE) {
                                 injectExpiredData(expiredWebView);
@@ -739,24 +675,11 @@ public class OverlayService extends Service {
                     if (cmd == null || cmd.equals("none")) return;
                     mainHandler.post(() -> {
                         switch (cmd) {
-                            case "idle":
-                                hideAll();
-                                showIdle();
-                                break;
-                            case "idle_off":
-                                // Sembunyikan idle screen
-                                if (idleView != null) {
-                                    try { windowManager.removeView(idleView); } catch(Exception ignored){}
-                                    idleView = null;
-                                }
-                                break;
                             case "sleep":
                                 showSleep();
                                 break;
                             case "wake":
                                 hideSleep();
-                                if (idleView == null) showIdle();
-                                else idleView.setVisibility(android.view.View.VISIBLE);
                                 break;
                         }
                     });
@@ -774,8 +697,6 @@ public class OverlayService extends Service {
         try {
             android.view.View black = new android.view.View(OverlayService.this);
             black.setBackgroundColor(android.graphics.Color.BLACK);
-            // Hide idle if showing
-            if (idleView != null) idleView.setVisibility(android.view.View.GONE);
 
             int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
                 ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
