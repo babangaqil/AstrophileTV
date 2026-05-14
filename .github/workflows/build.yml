@@ -27,12 +27,12 @@ jobs:
 
       - name: Decode Keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/astrophile.keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/app/astrophile.keystore
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_FILE: astrophile.keystore
+          KEYSTORE_FILE: ${{ github.workspace }}/app/astrophile.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
