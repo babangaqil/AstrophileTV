@@ -200,8 +200,6 @@ public class OverlayService extends Service {
             firebaseDb = FirebaseDatabase.getInstance(app);
             // Aktifkan persistence agar data tetap diterima saat background
             try { firebaseDb.setPersistenceEnabled(true); } catch (Exception ignored) {}
-            // Pastikan koneksi Firebase aktif setelah restart/force stop
-            try { firebaseDb.goOnline(); } catch (Exception ignored) {}
 
             sessionRef = firebaseDb.getReference("settings/activeSessions/" + tvNum);
 
@@ -229,20 +227,13 @@ public class OverlayService extends Service {
 
             // Tandai TV online di Firebase
             DatabaseReference tvStatusRef = firebaseDb.getReference("settings/tvStatus/" + tvNum);
+            tvStatusRef.setValue(new java.util.HashMap<String, Object>() {{
+                put("online", true);
+                put("lastSeen", System.currentTimeMillis());
+            }});
 
-            // Tunggu koneksi Firebase ready baru set online
-            firebaseDb.getReference(".info/connected").addValueEventListener(new ValueEventListener() {
-                @Override public void onDataChange(DataSnapshot snap) {
-                    Boolean connected = snap.getValue(Boolean.class);
-                    if (Boolean.TRUE.equals(connected)) {
-                        // Koneksi aktif — set online dan register onDisconnect
-                        tvStatusRef.child("online").setValue(true);
-                        tvStatusRef.child("lastSeen").setValue(System.currentTimeMillis());
-                        tvStatusRef.child("online").onDisconnect().setValue(false);
-                    }
-                }
-                @Override public void onCancelled(DatabaseError error) {}
-            });
+            // Auto set offline saat TV mati/disconnect dari internet
+            tvStatusRef.child("online").onDisconnect().setValue(false);
 
             // Heartbeat: update lastSeen setiap 30 detik
             mainHandler.post(new Runnable() {
@@ -280,16 +271,17 @@ public class OverlayService extends Service {
         namaPelanggan = nama    != null ? nama    : "";
 
         mainHandler.post(() -> {
-            if (isExp) {
+            if (!isAct) {
+                // Stop diklik / sesi selesai → sembunyikan SEMUA overlay
+                isActive = false;
+                hideAll();
+            } else if (isExp) {
                 showExpired();
-            } else if (isAct) {
+            } else {
                 isExpired = false;
                 isActive  = true;
                 hideExpired();
                 if (startTime > 0) showWidget();
-            } else {
-                isActive = false;
-                hideAll();
             }
         });
     }
@@ -481,6 +473,12 @@ public class OverlayService extends Service {
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
+        // Sembunyikan expiredWebView dan sleepView juga
+        if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
+        if (sleepView != null) {
+            try { windowManager.removeView(sleepView); } catch (Exception ignored) {}
+            sleepView = null;
+        }
         stopAlarm();
     }
 
