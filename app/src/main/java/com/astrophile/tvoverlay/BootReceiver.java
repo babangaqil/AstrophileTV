@@ -10,14 +10,15 @@ public class BootReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-            // Cek apakah sudah ada config tersimpan
+        String action = intent.getAction();
+        if (Intent.ACTION_BOOT_COMPLETED.equals(action) ||
+            Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
+            // Auto start setelah boot atau setelah update APK
             SharedPreferences prefs = context.getSharedPreferences(
                 "astro_tv_prefs", Context.MODE_PRIVATE
             );
             String apiKey = prefs.getString("apiKey", "");
             if (!apiKey.isEmpty()) {
-                // Auto start service saat TV nyala
                 Intent serviceIntent = new Intent(context, OverlayService.class);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(serviceIntent);

@@ -200,6 +200,8 @@ public class OverlayService extends Service {
             firebaseDb = FirebaseDatabase.getInstance(app);
             // Aktifkan persistence agar data tetap diterima saat background
             try { firebaseDb.setPersistenceEnabled(true); } catch (Exception ignored) {}
+            // Pastikan koneksi Firebase aktif setelah restart/force stop
+            try { firebaseDb.goOnline(); } catch (Exception ignored) {}
 
             sessionRef = firebaseDb.getReference("settings/activeSessions/" + tvNum);
 
@@ -227,13 +229,20 @@ public class OverlayService extends Service {
 
             // Tandai TV online di Firebase
             DatabaseReference tvStatusRef = firebaseDb.getReference("settings/tvStatus/" + tvNum);
-            tvStatusRef.setValue(new java.util.HashMap<String, Object>() {{
-                put("online", true);
-                put("lastSeen", System.currentTimeMillis());
-            }});
 
-            // Auto set offline saat TV mati/disconnect dari internet
-            tvStatusRef.child("online").onDisconnect().setValue(false);
+            // Tunggu koneksi Firebase ready baru set online
+            firebaseDb.getReference(".info/connected").addValueEventListener(new ValueEventListener() {
+                @Override public void onDataChange(DataSnapshot snap) {
+                    Boolean connected = snap.getValue(Boolean.class);
+                    if (Boolean.TRUE.equals(connected)) {
+                        // Koneksi aktif — set online dan register onDisconnect
+                        tvStatusRef.child("online").setValue(true);
+                        tvStatusRef.child("lastSeen").setValue(System.currentTimeMillis());
+                        tvStatusRef.child("online").onDisconnect().setValue(false);
+                    }
+                }
+                @Override public void onCancelled(DatabaseError error) {}
+            });
 
             // Heartbeat: update lastSeen setiap 30 detik
             mainHandler.post(new Runnable() {
