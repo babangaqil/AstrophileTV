@@ -3,6 +3,8 @@ package com.astrophile.tvoverlay;
 import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -201,8 +203,12 @@ public class SetupActivity extends AppCompatActivity {
             showStatus("Butuh izin overlay.", "#ffcc00");
             requestOverlayPermission();
         } else {
-            startOverlayService();
-            showStatus("Terhubung! | " + LicenseManager.getSavedDeviceId(SetupActivity.this), "#00ff88");
+            // Stop service lama dulu agar tvNum baru dipakai
+            stopService(new Intent(this, OverlayService.class));
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                startOverlayService();
+                showStatus("Terhubung! | " + LicenseManager.getSavedDeviceId(SetupActivity.this), "#00ff88");
+            }, 800);
         }
     }
 
