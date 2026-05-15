@@ -232,16 +232,14 @@ public class OverlayService extends Service {
                 put("lastSeen", System.currentTimeMillis());
             }});
 
-            // Auto set offline saat disconnect / TV mati
+            // Auto set offline saat TV mati/disconnect dari internet
             tvStatusRef.child("online").onDisconnect().setValue(false);
-            tvStatusRef.child("lastSeen").onDisconnect().setValue(System.currentTimeMillis());
 
-            // Heartbeat: update lastSeen setiap 30 detik agar dot tidak salah hijau
+            // Heartbeat: update lastSeen setiap 30 detik
             mainHandler.post(new Runnable() {
                 @Override public void run() {
-                    try {
-                        tvStatusRef.child("lastSeen").setValue(System.currentTimeMillis());
-                    } catch (Exception ignored) {}
+                    try { tvStatusRef.child("lastSeen").setValue(System.currentTimeMillis()); }
+                    catch (Exception ignored) {}
                     mainHandler.postDelayed(this, 30000);
                 }
             });
@@ -971,18 +969,6 @@ public class OverlayService extends Service {
             sessionRef.addValueEventListener(sessionListener);
         }
         return START_STICKY;
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        // Set offline saat service berhenti
-        try {
-            if (firebaseDb != null) {
-                firebaseDb.getReference("settings/tvStatus/" + tvNum)
-                    .child("online").setValue(false);
-            }
-        } catch (Exception ignored) {}
     }
 
 }
