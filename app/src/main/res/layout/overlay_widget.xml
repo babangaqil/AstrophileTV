@@ -2,51 +2,44 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:padding="10dp">
-    <FrameLayout
-        android:id="@+id/widgetBg"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/tvWidgetTime"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@drawable/widget_bg_normal"
-        android:padding="10dp">
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_gravity="center">
-            <TextView
-                android:id="@+id/tvWidgetIcon"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⏱"
-                android:textSize="20sp"
-                android:layout_marginEnd="8dp"/>
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-                <TextView
-                    android:id="@+id/tvWidgetTime"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="--:--"
-                    android:textSize="28sp"
-                    android:textStyle="bold"
-                    android:textColor="#00f5ff"
-                    android:letterSpacing="0.08"
-                    android:fontFamily="monospace"/>
-                <TextView
-                    android:id="@+id/tvWidgetLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="SISA WAKTU"
-                    android:textSize="10sp"
-                    android:textColor="#5a80a8"
-                    android:letterSpacing="0.2"/>
-            </LinearLayout>
-        </LinearLayout>
-    </FrameLayout>
+        android:text="--:--"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="#00f5ff"
+        android:letterSpacing="0.08"
+        android:fontFamily="monospace"
+        android:shadowColor="#000000"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="6"/>
+
+    <TextView
+        android:id="@+id/tvWidgetLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="SISA WAKTU"
+        android:textSize="10sp"
+        android:textColor="#a0c0e0"
+        android:letterSpacing="0.2"
+        android:gravity="center"
+        android:shadowColor="#000000"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="4"/>
+
+    <!-- widgetBg tetap ada (invisible) agar kode Java tidak crash -->
+    <FrameLayout
+        android:id="@+id/widgetBg"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"/>
+
 </LinearLayout>
