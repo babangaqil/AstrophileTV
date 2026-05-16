@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:transparent;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  min-height:100vh;
+  padding-top:32px;
+  overflow:hidden;
+}
+
+.card{
+  background:rgba(10,10,20,0.88);
+  border-radius:22px;
+  padding:20px 36px 18px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.10),
+    0 8px 40px rgba(0,0,0,0.70),
+    0 0 30px rgba(0,200,255,0.08);
+  min-width:280px;
+  animation:fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn{
+  from{opacity:0;transform:translateY(-16px);}
+  to{opacity:1;transform:translateY(0);}
+}
+
+@keyframes fadeOut{
+  from{opacity:1;transform:translateY(0);}
+  to{opacity:0;transform:translateY(-12px);}
+}
+
+.card.hiding{
+  animation:fadeOut 0.4s ease forwards;
+}
+
+.icon-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:2px;
+}
+
+.icon{
+  font-size:16px;
+  opacity:0.7;
+}
+
+.mode-label{
+  font-family:'Orbitron',monospace;
+  font-size:10px;
+  letter-spacing:3px;
+  color:rgba(255,255,255,0.40);
+}
+
+.time-display{
+  font-family:'Orbitron',monospace;
+  font-size:64px;
+  font-weight:900;
+  color:#ff2d6e;
+  text-shadow:
+    0 0 20px rgba(255,45,110,0.80),
+    0 0 40px rgba(255,45,110,0.40);
+  letter-spacing:4px;
+  line-height:1;
+}
+
+/* Warna berubah saat mendekati habis */
+.time-display.warning{
+  color:#ffcc00;
+  text-shadow:0 0 20px rgba(255,200,0,0.80),0 0 40px rgba(255,200,0,0.40);
+}
+
+.time-display.danger{
+  color:#ff2d6e;
+  animation:blink 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes blink{
+  from{opacity:1;}
+  to{opacity:0.5;}
+}
+
+.sub-label{
+  font-family:'Rajdhani',sans-serif;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:2px;
+  color:rgba(255,255,255,0.30);
+  margin-top:2px;
+}
+
+/* Progress bar */
+.progress-wrap{
+  width:100%;
+  height:3px;
+  background:rgba(255,255,255,0.08);
+  border-radius:100px;
+  margin-top:10px;
+  overflow:hidden;
+}
+
+.progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,#ff2d6e,#ff6b9d);
+  border-radius:100px;
+  transition:width 1s linear;
+  box-shadow:0 0 8px rgba(255,45,110,0.6);
+}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="icon-row">
+    <span class="icon">⏱</span>
+    <span class="mode-label" id="modeLabel">SISA WAKTU</span>
+  </div>
+  <div class="time-display" id="timeDisplay">00:00:00</div>
+  <div class="sub-label" id="subLabel">TV 1 · COUNTDOWN</div>
+  <div class="progress-wrap">
+    <div class="progress-fill" id="progressFill" style="width:60%;"></div>
+  </div>
+</div>
+
+<script>
+function setData(timeStr, mode, tvNum, totalSec, sisaSec) {
+  document.getElementById('timeDisplay').textContent = timeStr
+
+  const modeLabel = mode === 'countdown' ? 'SISA WAKTU' : 'DURASI MAIN'
+  document.getElementById('modeLabel').textContent = modeLabel
+  document.getElementById('subLabel').textContent = 'TV ' + tvNum + ' · ' + mode.toUpperCase()
+
+  // Warna berdasarkan sisa waktu
+  const el = document.getElementById('timeDisplay')
+  el.className = 'time-display'
+  if (sisaSec <= 60) el.classList.add('danger')
+  else if (sisaSec <= 300) el.classList.add('warning')
+
+  // Progress bar
+  if (totalSec > 0) {
+    const pct = Math.min(100, Math.max(0, (sisaSec / totalSec) * 100))
+    document.getElementById('progressFill').style.width = pct + '%'
+  }
+}
+
+// Auto-hide setelah 5 detik
+setTimeout(() => {
+  document.getElementById('card').classList.add('hiding')
+}, 4600)
+
+// Inject data dari Android
+if (window.Android && Android.getTimeOverlayData) {
+  try {
+    const data = JSON.parse(Android.getTimeOverlayData())
+    setData(data.timeStr, data.mode, data.tvNum, data.totalSec, data.sisaSec)
+  } catch(e) {}
+}
+</script>
+</body>
+</html>

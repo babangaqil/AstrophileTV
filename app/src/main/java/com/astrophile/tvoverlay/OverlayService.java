@@ -649,7 +649,8 @@ public class OverlayService extends Service {
             if (widgetView     != null) windowManager.removeView(widgetView);
             if (toastView      != null) windowManager.removeView(toastView);
             if (expiredView    != null) windowManager.removeView(expiredView);
-            if (expiredWebView != null) windowManager.removeView(expiredWebView);
+            if (expiredWebView  != null) windowManager.removeView(expiredWebView);
+            if (timeOverlayWv  != null) windowManager.removeView(timeOverlayWv);
             if (updateView     != null) windowManager.removeView(updateView);
             if (sleepView      != null) windowManager.removeView(sleepView);
         } catch (Exception e) {}
@@ -793,49 +794,76 @@ public class OverlayService extends Service {
     private View sleepView = null;
 
     // ── SHOW TIME OVERLAY (5 detik) ──────────────────────────────
+    private android.webkit.WebView timeOverlayWv = null;
+
     private void showTimeOverlay() {
-        if (!isActive) return; // hanya tampil jika sesi aktif
+        if (!isActive) return;
+        // Hitung sisa waktu
+        long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+        long sisa = Math.max(0, duration - elapsed);
+        final String timeStr = formatTime(sisa);
+        final String modeVal = (mode != null) ? mode : "countdown";
+        final int tvNumVal = tvNum;
+        final long totalSec = duration;
+        final long sisaSec = sisa;
+
         mainHandler.post(new Runnable() {
             @Override public void run() {
                 try {
-                    // Hitung sisa waktu
-                    long elapsed = (System.currentTimeMillis() - startTime) / 1000;
-                    long sisa = Math.max(0, duration - elapsed);
-                    String timeStr = formatTime(sisa);
-                    String modeStr = (mode != null && mode.equals("countdown")) ? "SISA WAKTU" : "DURASI MAIN";
-
-                    // Buat overlay view custom
-                    android.widget.TextView timeView = new android.widget.TextView(getApplicationContext());
-                    timeView.setText(modeStr + "\n" + timeStr);
-                    timeView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48);
-                    timeView.setTextColor(android.graphics.Color.WHITE);
-                    timeView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                    timeView.setGravity(android.view.Gravity.CENTER);
-                    timeView.setBackgroundColor(android.graphics.Color.argb(200, 0, 0, 0));
-                    timeView.setPadding(60, 40, 60, 40);
+                    // Hapus overlay sebelumnya jika masih ada
+                    if (timeOverlayWv != null) {
+                        try { windowManager.removeView(timeOverlayWv); } catch (Exception ignored) {}
+                        timeOverlayWv = null;
+                    }
 
                     int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
                         ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                         : android.view.WindowManager.LayoutParams.TYPE_PHONE;
 
                     android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
-                        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+                        android.view.WindowManager.LayoutParams.MATCH_PARENT,
                         android.view.WindowManager.LayoutParams.WRAP_CONTENT,
                         overlayType,
                         android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                         android.graphics.PixelFormat.TRANSLUCENT
                     );
-                    params.gravity = android.view.Gravity.CENTER;
+                    params.gravity = android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL;
+                    params.y = 0;
 
-                    windowManager.addView(timeView, params);
+                    android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
+                    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    wv.getSettings().setJavaScriptEnabled(true);
+                    wv.getSettings().setDomStorageEnabled(true);
 
-                    // Hapus setelah 5 detik
+                    // Bridge untuk inject data
+                    wv.addJavascriptInterface(new Object() {
+                        @android.webkit.JavascriptInterface
+                        public String getTimeOverlayData() {
+                            return "{"timeStr":"" + timeStr + "","
+                                + ""mode":"" + modeVal + "","
+                                + ""tvNum":" + tvNumVal + ","
+                                + ""totalSec":" + totalSec + ","
+                                + ""sisaSec":" + sisaSec + "}";
+                        }
+                    }, "Android");
+
+                    wv.loadUrl("file:///android_asset/timeoverlay.html");
+                    timeOverlayWv = wv;
+                    windowManager.addView(timeOverlayWv, params);
+
+                    // Hapus setelah 5.5 detik (0.5 detik extra untuk animasi fadeout)
                     mainHandler.postDelayed(new Runnable() {
                         @Override public void run() {
-                            try { windowManager.removeView(timeView); } catch (Exception ignored) {}
+                            try {
+                                if (timeOverlayWv != null) {
+                                    windowManager.removeView(timeOverlayWv);
+                                    timeOverlayWv = null;
+                                }
+                            } catch (Exception ignored) {}
                         }
-                    }, 5000);
+                    }, 5500);
 
                 } catch (Exception e) {
                     android.util.Log.e("Astrophile", "showTimeOverlay error: " + e.getMessage());
