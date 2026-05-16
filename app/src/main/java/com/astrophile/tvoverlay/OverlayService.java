@@ -810,8 +810,7 @@ public class OverlayService extends Service {
 
                 // Buat overlay view custom
                 android.widget.TextView tv = new android.widget.TextView(getApplicationContext());
-                tv.setText(modeStr + "
-" + timeStr);
+                tv.setText(modeStr + "\n" + timeStr);
                 tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48);
                 tv.setTextColor(android.graphics.Color.WHITE);
                 tv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
