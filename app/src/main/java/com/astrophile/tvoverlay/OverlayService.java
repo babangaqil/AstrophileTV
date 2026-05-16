@@ -826,7 +826,7 @@ public class OverlayService extends Service {
                         ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                         : android.view.WindowManager.LayoutParams.TYPE_PHONE;
                     android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
-                        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+                        android.view.WindowManager.LayoutParams.MATCH_PARENT,
                         android.view.WindowManager.LayoutParams.WRAP_CONTENT,
                         overlayType,
                         android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
@@ -834,13 +834,9 @@ public class OverlayService extends Service {
                         android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                         android.graphics.PixelFormat.TRANSLUCENT
                     );
-                    // Bayar overlay di BAWAH widget timer
-                    // Dengan gravity BOTTOM: y kecil = dekat bawah layar, y besar = lebih ke atas
-                    // Widget timer: BOTTOM END y=24 (jarak 24px dari bawah)
-                    // Bayar overlay harus y < 24 agar tampil di BAWAH widget
-                    // Estimasi tinggi bayar overlay ~36px → taruh di y=4 dari bawah layar
-                    params.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.END;
-                    params.x = 24;
+                    // Full width agar bisa center, posisi tepat di bawah widget timer
+                    params.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
+                    params.x = 0;
                     params.y = 4;
 
                     android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());

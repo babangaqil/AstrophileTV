@@ -11,35 +11,28 @@ body{
   align-items:flex-end;
   justify-content:flex-end;
   min-height:100vh;
-  padding:0 0 0 0;
+  padding:0 34px 6px 0;
   overflow:hidden;
 }
-.card{
-  background:rgba(8,8,18,0.82);
-  border-radius:8px;
-  padding:5px 10px 4px;
-  display:flex;align-items:center;gap:5px;
+.badge{
+  display:flex;align-items:center;justify-content:center;gap:5px;
   animation:fadeIn 0.3s ease forwards;
-  transition:box-shadow 0.3s;
 }
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
-.icon{font-size:10px;line-height:1;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.icon{font-size:11px;line-height:1;}
 .status{
   font-family:'Orbitron',monospace;
-  font-size:9px;font-weight:700;
+  font-size:10px;font-weight:700;
   letter-spacing:1px;line-height:1;
-  transition:color 0.3s,text-shadow 0.3s;
 }
-.status.sudah{color:#00ff88;text-shadow:0 0 8px rgba(0,255,136,0.70);}
-.status.belum{color:#ff2d6e;text-shadow:0 0 8px rgba(255,45,110,0.70);}
-.card.sudah{box-shadow:0 0 0 1px rgba(0,255,136,0.20),0 2px 10px rgba(0,0,0,0.50);}
-.card.belum{box-shadow:0 0 0 1px rgba(255,45,110,0.20),0 2px 10px rgba(0,0,0,0.50);}
+.status.sudah{color:#00ff88;text-shadow:0 0 8px rgba(0,255,136,0.80);}
+.status.belum{color:#ff2d6e;text-shadow:0 0 8px rgba(255,45,110,0.80);}
 </style>
 </head>
 <body>
-<div class="card belum" id="card">
-  <span class="icon" id="icon">❌</span>
-  <span class="status belum" id="status">BELUM BAYAR</span>
+<div class="badge" id="badge">
+  <span class="icon" id="icon">✅</span>
+  <span class="status sudah" id="status">SUDAH BAYAR</span>
 </div>
 <script>
 function getParam(name){
@@ -50,19 +43,12 @@ function getParam(name){
   return null
 }
 function updateStatus(s){
-  var card=document.getElementById('card');
   var el=document.getElementById('status');
   var ic=document.getElementById('icon');
   if(s==='sudah'){
-    card.className='card sudah';
-    el.className='status sudah';
-    el.textContent='SUDAH BAYAR';
-    ic.textContent='✅';
+    el.className='status sudah';el.textContent='SUDAH BAYAR';ic.textContent='✅';
   } else {
-    card.className='card belum';
-    el.className='status belum';
-    el.textContent='BELUM BAYAR';
-    ic.textContent='❌';
+    el.className='status belum';el.textContent='BELUM BAYAR';ic.textContent='❌';
   }
 }
 updateStatus(getParam('bayarStatus')||'belum');
