@@ -63,6 +63,8 @@ public class OverlayService extends Service {
     private boolean isActive = false;
     private long startTime = 0;
     private long duration = 0;
+    private boolean showBayarInWidget = false;
+    private String  currentBayarStatus = "belum";
     private String mode = "";
     private String namaPelanggan = "";
     private String tvName = "TV 1";
@@ -328,8 +330,26 @@ public class OverlayService extends Service {
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
+        TextView tvBayar = widgetView.findViewById(R.id.tvWidgetBayar);
+        View     divider = widgetView.findViewById(R.id.widgetDivider);
 
         if (tvTime != null) tvTime.setText(timeStr);
+
+        // Update status bayar di dalam widget
+        if (tvBayar != null && divider != null) {
+            if (showBayarInWidget) {
+                tvBayar.setVisibility(android.view.View.VISIBLE);
+                divider.setVisibility(android.view.View.VISIBLE);
+                boolean sudah = "sudah".equals(currentBayarStatus);
+                tvBayar.setText(sudah ? "SUDAH BAYAR" : "BELUM BAYAR");
+                tvBayar.setTextColor(sudah
+                    ? android.graphics.Color.parseColor("#00ff88")
+                    : android.graphics.Color.parseColor("#ff2d6e"));
+            } else {
+                tvBayar.setVisibility(android.view.View.GONE);
+                divider.setVisibility(android.view.View.GONE);
+            }
+        }
 
         if (secs <= 0) {
             // Waktu habis → tampil fullscreen expired
@@ -655,7 +675,6 @@ public class OverlayService extends Service {
             if (expiredView    != null) windowManager.removeView(expiredView);
             if (expiredWebView  != null) windowManager.removeView(expiredWebView);
             if (timeOverlayWv  != null) windowManager.removeView(timeOverlayWv);
-            if (bayarOverlayWv != null) windowManager.removeView(bayarOverlayWv);
             if (bayarStatusRef != null && bayarStatusListener != null) {
                 bayarStatusRef.removeEventListener(bayarStatusListener);
             }
@@ -808,50 +827,14 @@ public class OverlayService extends Service {
     private View sleepView = null;
 
     // ── BAYAR OVERLAY (toggle on/off) ─────────────────────────────
-    private android.webkit.WebView bayarOverlayWv = null;
-
     private com.google.firebase.database.ValueEventListener bayarStatusListener = null;
     private com.google.firebase.database.DatabaseReference  bayarStatusRef      = null;
 
     private void showBayarOverlay(final String bayarStatusInit) {
-        // Buat WebView overlay dulu
+        showBayarInWidget = true;
+        currentBayarStatus = bayarStatusInit != null ? bayarStatusInit : "belum";
         mainHandler.post(new Runnable() {
-            @Override public void run() {
-                try {
-                    if (bayarOverlayWv != null) {
-                        try { windowManager.removeView(bayarOverlayWv); } catch (Exception ignored) {}
-                        bayarOverlayWv = null;
-                    }
-
-                    int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
-                        ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                        : android.view.WindowManager.LayoutParams.TYPE_PHONE;
-
-                    android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
-                        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
-                        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
-                        overlayType,
-                        android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
-                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                        android.graphics.PixelFormat.TRANSLUCENT
-                    );
-                    // Di bawah widget timer (BOTTOM END) dengan gap agar tidak bertabrakan
-                    // Widget timer: y=24, tinggi ~80dp → bayar overlay: y = 24+80+8 = 112dp dari bawah
-                    params.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.END;
-                    params.x = 24;
-                    params.y = 112;
-
-                    android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
-                    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                    wv.getSettings().setJavaScriptEnabled(true);
-                    wv.loadUrl("file:///android_asset/bayaroverlay.html?bayarStatus=" + bayarStatusInit);
-                    bayarOverlayWv = wv;
-                    windowManager.addView(bayarOverlayWv, params);
-                } catch (Exception e) {
-                    android.util.Log.e("Astrophile", "showBayarOverlay error: " + e.getMessage());
-                }
-            }
+            @Override public void run() { updateWidget(); }
         });
 
         // Listen perubahan bayarStatus dari Firebase secara realtime
@@ -862,18 +845,11 @@ public class OverlayService extends Service {
             bayarStatusRef = firebaseDb.getReference("settings/activeSessions/" + tvNum + "/bayarStatus");
             bayarStatusListener = new com.google.firebase.database.ValueEventListener() {
                 @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
-                    if (bayarOverlayWv == null) return;
                     final String status = snap.exists() && snap.getValue() != null
                         ? snap.getValue(String.class) : "belum";
+                    currentBayarStatus = status;
                     mainHandler.post(new Runnable() {
-                        @Override public void run() {
-                            if (bayarOverlayWv != null) {
-                                // Update overlay via JavaScript
-                                bayarOverlayWv.evaluateJavascript(
-                                    "updateStatus('" + status + "')", null
-                                );
-                            }
-                        }
+                        @Override public void run() { updateWidget(); }
                     });
                 }
                 @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
@@ -883,21 +859,14 @@ public class OverlayService extends Service {
     }
 
     private void hideBayarOverlay() {
-        // Stop listener
+        showBayarInWidget = false;
         if (bayarStatusRef != null && bayarStatusListener != null) {
             bayarStatusRef.removeEventListener(bayarStatusListener);
             bayarStatusListener = null;
             bayarStatusRef = null;
         }
         mainHandler.post(new Runnable() {
-            @Override public void run() {
-                try {
-                    if (bayarOverlayWv != null) {
-                        windowManager.removeView(bayarOverlayWv);
-                        bayarOverlayWv = null;
-                    }
-                } catch (Exception ignored) {}
-            }
+            @Override public void run() { updateWidget(); }
         });
     }
 
