@@ -271,16 +271,20 @@ public class OverlayService extends Service {
         namaPelanggan = nama    != null ? nama    : "";
 
         mainHandler.post(() -> {
-            if (isExp) {
+            if (!isAct) {
+                isActive = false;
+                hideAll();
+            } else if (isExp) {
                 showExpired();
-            } else if (isAct) {
+            } else {
                 isExpired = false;
                 isActive  = true;
                 hideExpired();
-                if (startTime > 0) showWidget();
-            } else {
-                isActive = false;
-                hideAll();
+                if (startTime > 0) {
+                    showWidget();
+                    // Langsung update widget saat duration berubah (bonus/tambah waktu)
+                    updateWidget();
+                }
             }
         });
     }
