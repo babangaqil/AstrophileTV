@@ -834,10 +834,23 @@ public class OverlayService extends Service {
                         android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                         android.graphics.PixelFormat.TRANSLUCENT
                     );
-                    // Pojok kanan bawah, di atas widget timer (widget y=24 + tinggi ~100dp + gap 8dp)
                     params.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.END;
                     params.x = 24;
-                    params.y = 140;
+
+                    // Hitung posisi: di bawah widget timer
+                    // Widget di BOTTOM END y=24, ukur tinggi widget lalu posisikan bayar overlay di bawahnya
+                    int widgetH = 0;
+                    if (widgetView != null && widgetView.getHeight() > 0) {
+                        widgetH = widgetView.getHeight();
+                    } else {
+                        // Fallback estimasi tinggi widget ~110px (tergantung density)
+                        float density = getResources().getDisplayMetrics().density;
+                        widgetH = (int)(110 * density);
+                    }
+                    // y = jarak dari bawah layar: widget y(24dp) + tinggi widget + gap(4dp)
+                    float dp = getResources().getDisplayMetrics().density;
+                    params.y = (int)(24 * dp) + widgetH + (int)(4 * dp);
+
                     android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
                     wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
                     wv.getSettings().setJavaScriptEnabled(true);
