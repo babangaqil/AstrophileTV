@@ -795,48 +795,51 @@ public class OverlayService extends Service {
     // ── SHOW TIME OVERLAY (5 detik) ──────────────────────────────
     private void showTimeOverlay() {
         if (!isActive) return; // hanya tampil jika sesi aktif
-        mainHandler.post(() -> {
-            try {
-                // Hitung sisa waktu dari state saat ini
-                String timeStr = formatTime(remainSec > 0 ? remainSec : 0);
-                String modeStr = (mode != null && mode.equals("countdown")) ? "SISA WAKTU" : "DURASI";
+        mainHandler.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    // Hitung sisa waktu
+                    long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                    long sisa = Math.max(0, duration - elapsed);
+                    String timeStr = formatTime(sisa);
+                    String modeStr = (mode != null && mode.equals("countdown")) ? "SISA WAKTU" : "DURASI MAIN";
 
-                android.widget.Toast toast = android.widget.Toast.makeText(
-                    getApplicationContext(),
-                    modeStr + ": " + timeStr,
-                    android.widget.Toast.LENGTH_LONG
-                );
-                toast.setGravity(android.view.Gravity.CENTER, 0, 0);
+                    // Buat overlay view custom
+                    android.widget.TextView timeView = new android.widget.TextView(getApplicationContext());
+                    timeView.setText(modeStr + "\n" + timeStr);
+                    timeView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48);
+                    timeView.setTextColor(android.graphics.Color.WHITE);
+                    timeView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                    timeView.setGravity(android.view.Gravity.CENTER);
+                    timeView.setBackgroundColor(android.graphics.Color.argb(200, 0, 0, 0));
+                    timeView.setPadding(60, 40, 60, 40);
 
-                // Buat overlay view custom
-                android.widget.TextView tv = new android.widget.TextView(getApplicationContext());
-                tv.setText(modeStr + "\n" + timeStr);
-                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48);
-                tv.setTextColor(android.graphics.Color.WHITE);
-                tv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                tv.setGravity(android.view.Gravity.CENTER);
-                tv.setBackgroundColor(android.graphics.Color.argb(200, 0, 0, 0));
-                tv.setPadding(60, 40, 60, 40);
+                    int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
+                        ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : android.view.WindowManager.LayoutParams.TYPE_PHONE;
 
-                android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
-                    android.view.WindowManager.LayoutParams.WRAP_CONTENT,
-                    android.view.WindowManager.LayoutParams.WRAP_CONTENT,
-                    getOverlayType(),
-                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-                    android.graphics.PixelFormat.TRANSLUCENT
-                );
-                params.gravity = android.view.Gravity.CENTER;
+                    android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
+                        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+                        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+                        overlayType,
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                        android.graphics.PixelFormat.TRANSLUCENT
+                    );
+                    params.gravity = android.view.Gravity.CENTER;
 
-                windowManager.addView(tv, params);
+                    windowManager.addView(timeView, params);
 
-                // Hapus setelah 5 detik
-                mainHandler.postDelayed(() -> {
-                    try { windowManager.removeView(tv); } catch (Exception ignored) {}
-                }, 5000);
+                    // Hapus setelah 5 detik
+                    mainHandler.postDelayed(new Runnable() {
+                        @Override public void run() {
+                            try { windowManager.removeView(timeView); } catch (Exception ignored) {}
+                        }
+                    }, 5000);
 
-            } catch (Exception e) {
-                android.util.Log.e("Astrophile", "showTimeOverlay error: " + e.getMessage());
+                } catch (Exception e) {
+                    android.util.Log.e("Astrophile", "showTimeOverlay error: " + e.getMessage());
+                }
             }
         });
     }
