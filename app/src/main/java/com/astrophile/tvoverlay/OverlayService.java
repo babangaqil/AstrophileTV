@@ -838,13 +838,14 @@ public class OverlayService extends Service {
                     wv.getSettings().setDomStorageEnabled(true);
 
                     // Inject data via URL parameter
+                    // Kirim startTime Firebase (ms) agar timer sync dengan sesi asli
                     String url = "file:///android_asset/timeoverlay.html"
-                        + "?timeStr=" + android.net.Uri.encode(timeStr)
-                        + "&mode=" + android.net.Uri.encode(modeVal)
+                        + "?mode=" + android.net.Uri.encode(modeVal)
                         + "&tvNum=" + tvNumVal
                         + "&totalSec=" + totalSec
                         + "&sisaSec=" + sisaSec
-                        + "&startMs=" + System.currentTimeMillis();
+                        + "&fbStartTime=" + startTime
+                        + "&loadMs=" + System.currentTimeMillis();
                     wv.loadUrl(url);
                     timeOverlayWv = wv;
                     windowManager.addView(timeOverlayWv, params);
