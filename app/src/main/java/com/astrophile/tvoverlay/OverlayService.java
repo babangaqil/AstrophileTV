@@ -841,11 +841,14 @@ public class OverlayService extends Service {
                     wv.addJavascriptInterface(new Object() {
                         @android.webkit.JavascriptInterface
                         public String getTimeOverlayData() {
-                            return "{"timeStr":"" + timeStr + "","
-                                + ""mode":"" + modeVal + "","
-                                + ""tvNum":" + tvNumVal + ","
-                                + ""totalSec":" + totalSec + ","
-                                + ""sisaSec":" + sisaSec + "}";
+                            String json = "{"
+                                + "\"timeStr\":\"" + timeStr + "\"" + ","
+                                + "\"mode\":\"" + modeVal + "\"" + ","
+                                + "\"tvNum\":" + tvNumVal + ","
+                                + "\"totalSec\":" + totalSec + ","
+                                + "\"sisaSec\":" + sisaSec
+                                + "}";
+                            return json;
                         }
                     }, "Android");
 
