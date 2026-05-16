@@ -837,22 +837,15 @@ public class OverlayService extends Service {
                     wv.getSettings().setJavaScriptEnabled(true);
                     wv.getSettings().setDomStorageEnabled(true);
 
-                    // Bridge untuk inject data
-                    wv.addJavascriptInterface(new Object() {
-                        @android.webkit.JavascriptInterface
-                        public String getTimeOverlayData() {
-                            String json = "{"
-                                + "\"timeStr\":\"" + timeStr + "\"" + ","
-                                + "\"mode\":\"" + modeVal + "\"" + ","
-                                + "\"tvNum\":" + tvNumVal + ","
-                                + "\"totalSec\":" + totalSec + ","
-                                + "\"sisaSec\":" + sisaSec
-                                + "}";
-                            return json;
-                        }
-                    }, "Android");
-
-                    wv.loadUrl("file:///android_asset/timeoverlay.html");
+                    // Inject data via URL parameter
+                    String url = "file:///android_asset/timeoverlay.html"
+                        + "?timeStr=" + android.net.Uri.encode(timeStr)
+                        + "&mode=" + android.net.Uri.encode(modeVal)
+                        + "&tvNum=" + tvNumVal
+                        + "&totalSec=" + totalSec
+                        + "&sisaSec=" + sisaSec
+                        + "&startMs=" + System.currentTimeMillis();
+                    wv.loadUrl(url);
                     timeOverlayWv = wv;
                     windowManager.addView(timeOverlayWv, params);
 
