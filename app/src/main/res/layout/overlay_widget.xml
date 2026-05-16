@@ -2,9 +2,11 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
+    android:orientation="vertical"
+    android:gravity="end"
     android:padding="10dp">
+
+    <!-- Box card timer (existing) -->
     <FrameLayout
         android:id="@+id/widgetBg"
         android:layout_width="wrap_content"
@@ -14,72 +16,60 @@
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:layout_gravity="center">
-
-            <!-- Baris timer -->
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:id="@+id/tvWidgetIcon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#9201;"
+                android:textSize="20sp"
+                android:layout_marginEnd="8dp"/>
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:orientation="vertical">
                 <TextView
-                    android:id="@+id/tvWidgetIcon"
+                    android:id="@+id/tvWidgetTime"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="&#9201;"
-                    android:textSize="20sp"
-                    android:layout_marginEnd="8dp"/>
-                <LinearLayout
+                    android:text="--:--"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:textColor="#00f5ff"
+                    android:letterSpacing="0.08"
+                    android:fontFamily="monospace"/>
+                <TextView
+                    android:id="@+id/tvWidgetLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
-                    <TextView
-                        android:id="@+id/tvWidgetTime"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="--:--"
-                        android:textSize="28sp"
-                        android:textStyle="bold"
-                        android:textColor="#00f5ff"
-                        android:letterSpacing="0.08"
-                        android:fontFamily="monospace"/>
-                    <TextView
-                        android:id="@+id/tvWidgetLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="SISA WAKTU"
-                        android:textSize="10sp"
-                        android:textColor="#5a80a8"
-                        android:letterSpacing="0.2"/>
-                </LinearLayout>
+                    android:text="SISA WAKTU"
+                    android:textSize="10sp"
+                    android:textColor="#5a80a8"
+                    android:letterSpacing="0.2"/>
             </LinearLayout>
-
-            <!-- Divider tipis -->
-            <View
-                android:id="@+id/widgetDivider"
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#1affffff"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="4dp"
-                android:visibility="gone"/>
-
-            <!-- Status bayar -->
-            <TextView
-                android:id="@+id/tvWidgetBayar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="BELUM BAYAR"
-                android:textSize="9sp"
-                android:textStyle="bold"
-                android:textColor="#ff2d6e"
-                android:letterSpacing="0.15"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:visibility="gone"/>
-
         </LinearLayout>
     </FrameLayout>
+
+    <!-- Box status bayar — terpisah di bawah, gap 6dp -->
+    <TextView
+        android:id="@+id/tvWidgetBayar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_gravity="end"
+        android:background="@drawable/widget_bg_normal"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:text="BELUM BAYAR"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:textColor="#ff2d6e"
+        android:letterSpacing="0.15"
+        android:fontFamily="monospace"
+        android:gravity="center"
+        android:visibility="gone"/>
+
 </LinearLayout>

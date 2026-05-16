@@ -331,23 +331,20 @@ public class OverlayService extends Service {
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
         TextView tvBayar = widgetView.findViewById(R.id.tvWidgetBayar);
-        View     divider = widgetView.findViewById(R.id.widgetDivider);
 
         if (tvTime != null) tvTime.setText(timeStr);
 
-        // Update status bayar di dalam widget
-        if (tvBayar != null && divider != null) {
+        // Update status bayar — box terpisah di bawah card timer
+        if (tvBayar != null) {
             if (showBayarInWidget) {
                 tvBayar.setVisibility(android.view.View.VISIBLE);
-                divider.setVisibility(android.view.View.VISIBLE);
                 boolean sudah = "sudah".equals(currentBayarStatus);
-                tvBayar.setText(sudah ? "SUDAH BAYAR" : "BELUM BAYAR");
+                tvBayar.setText(sudah ? "✅ SUDAH BAYAR" : "❌ BELUM BAYAR");
                 tvBayar.setTextColor(sudah
                     ? android.graphics.Color.parseColor("#00ff88")
                     : android.graphics.Color.parseColor("#ff2d6e"));
             } else {
                 tvBayar.setVisibility(android.view.View.GONE);
-                divider.setVisibility(android.view.View.GONE);
             }
         }
 
@@ -382,8 +379,15 @@ public class OverlayService extends Service {
                 }, 10000);
             }
         } else {
-            // > 5 menit — sembunyikan widget
-            widgetView.setVisibility(View.GONE);
+            // > 5 menit — sembunyikan widget KECUALI jika status bayar sedang ditampilkan
+            if (showBayarInWidget) {
+                widgetView.setVisibility(View.VISIBLE);
+                if (tvTime != null) tvTime.setTextColor(android.graphics.Color.parseColor("#00f5ff"));
+                if (tvLabel != null) tvLabel.setText("SISA WAKTU");
+                if (bgView != null) bgView.setBackgroundResource(R.drawable.widget_bg_normal);
+            } else {
+                widgetView.setVisibility(View.GONE);
+            }
         }
     }
 
