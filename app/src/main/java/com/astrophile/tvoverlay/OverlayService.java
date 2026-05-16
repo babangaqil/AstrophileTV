@@ -271,17 +271,16 @@ public class OverlayService extends Service {
         namaPelanggan = nama    != null ? nama    : "";
 
         mainHandler.post(() -> {
-            if (!isAct) {
-                // Stop diklik / sesi selesai → sembunyikan SEMUA overlay
-                isActive = false;
-                hideAll();
-            } else if (isExp) {
+            if (isExp) {
                 showExpired();
-            } else {
+            } else if (isAct) {
                 isExpired = false;
                 isActive  = true;
                 hideExpired();
                 if (startTime > 0) showWidget();
+            } else {
+                isActive = false;
+                hideAll();
             }
         });
     }
@@ -473,12 +472,6 @@ public class OverlayService extends Service {
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
-        // Sembunyikan expiredWebView dan sleepView juga
-        if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
-        if (sleepView != null) {
-            try { windowManager.removeView(sleepView); } catch (Exception ignored) {}
-            sleepView = null;
-        }
         stopAlarm();
     }
 
@@ -781,6 +774,13 @@ public class OverlayService extends Service {
                             case "wake":
                                 hideSleep();
                                 break;
+                            case "showtime":
+                                showTimeOverlay();
+                                // Reset cmd ke none setelah diproses
+                                try {
+                                    snap.getRef().child("cmd").setValue("none");
+                                } catch (Exception ignored) {}
+                                break;
                         }
                     });
                 }
@@ -791,6 +791,56 @@ public class OverlayService extends Service {
     }
 
     private View sleepView = null;
+
+    // ── SHOW TIME OVERLAY (5 detik) ──────────────────────────────
+    private void showTimeOverlay() {
+        if (!isActive) return; // hanya tampil jika sesi aktif
+        mainHandler.post(() -> {
+            try {
+                // Hitung sisa waktu dari state saat ini
+                String timeStr = formatTime(remainSec > 0 ? remainSec : 0);
+                String modeStr = (mode != null && mode.equals("countdown")) ? "SISA WAKTU" : "DURASI";
+
+                android.widget.Toast toast = android.widget.Toast.makeText(
+                    getApplicationContext(),
+                    modeStr + ": " + timeStr,
+                    android.widget.Toast.LENGTH_LONG
+                );
+                toast.setGravity(android.view.Gravity.CENTER, 0, 0);
+
+                // Buat overlay view custom
+                android.widget.TextView tv = new android.widget.TextView(getApplicationContext());
+                tv.setText(modeStr + "
+" + timeStr);
+                tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48);
+                tv.setTextColor(android.graphics.Color.WHITE);
+                tv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                tv.setGravity(android.view.Gravity.CENTER);
+                tv.setBackgroundColor(android.graphics.Color.argb(200, 0, 0, 0));
+                tv.setPadding(60, 40, 60, 40);
+
+                android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+                    getOverlayType(),
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                    android.graphics.PixelFormat.TRANSLUCENT
+                );
+                params.gravity = android.view.Gravity.CENTER;
+
+                windowManager.addView(tv, params);
+
+                // Hapus setelah 5 detik
+                mainHandler.postDelayed(() -> {
+                    try { windowManager.removeView(tv); } catch (Exception ignored) {}
+                }, 5000);
+
+            } catch (Exception e) {
+                android.util.Log.e("Astrophile", "showTimeOverlay error: " + e.getMessage());
+            }
+        });
+    }
 
     private void showSleep() {
         if (sleepView != null) return;
