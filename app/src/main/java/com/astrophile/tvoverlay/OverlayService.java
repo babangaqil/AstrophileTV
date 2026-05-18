@@ -775,6 +775,8 @@ public class OverlayService extends Service {
                     if (!snap.exists()) return;
                     String cmd = snap.child("cmd").getValue(String.class);
                     if (cmd == null || cmd.equals("none")) return;
+                    // Ack segera — cegah cmd dieksekusi ulang saat Firebase reconnect
+                    try { snap.getRef().child("cmd").setValue("none"); } catch (Exception ignored) {}
                     mainHandler.post(() -> {
                         switch (cmd) {
                             case "sleep":
@@ -785,16 +787,13 @@ public class OverlayService extends Service {
                                 break;
                             case "showtime":
                                 showTimeOverlay();
-                                try { snap.getRef().child("cmd").setValue("none"); } catch (Exception ignored) {}
                                 break;
                             case "showbayar":
                                 String bs = snap.child("bayarStatus").getValue(String.class);
                                 showBayarOverlay(bs != null ? bs : "belum");
-                                try { snap.getRef().child("cmd").setValue("none"); } catch (Exception ignored) {}
                                 break;
                             case "hidebayar":
                                 hideBayarOverlay();
-                                try { snap.getRef().child("cmd").setValue("none"); } catch (Exception ignored) {}
                                 break;
                         }
                     });
