@@ -815,6 +815,14 @@ public class OverlayService extends Service {
 
     private void showBayarOverlay(final String bayarStatusInit) {
         currentBayarStatus = bayarStatusInit != null ? bayarStatusInit : "belum";
+
+        // Hentikan listener lama dulu sebelum buat yang baru
+        if (bayarStatusRef != null && bayarStatusListener != null) {
+            bayarStatusRef.removeEventListener(bayarStatusListener);
+            bayarStatusListener = null;
+            bayarStatusRef = null;
+        }
+
         mainHandler.post(new Runnable() {
             @Override public void run() {
                 try {
@@ -834,7 +842,6 @@ public class OverlayService extends Service {
                         android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                         android.graphics.PixelFormat.TRANSLUCENT
                     );
-                    // Full width agar bisa center, posisi tepat di bawah widget timer
                     params.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
                     params.x = 0;
                     params.y = 4;
@@ -842,39 +849,60 @@ public class OverlayService extends Service {
                     android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
                     wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
                     wv.getSettings().setJavaScriptEnabled(true);
+
+                    // Inject Firebase config ke HTML via WebViewClient setelah page load
+                    SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+                    final String fbApiKey    = prefs.getString("apiKey", "");
+                    final String fbDbUrl     = prefs.getString("dbUrl", "");
+                    final String fbProjectId = prefs.getString("projectId", "");
+                    final int    fbTvNum     = tvNum;
+                    final String initStatus  = currentBayarStatus;
+
+                    wv.setWebViewClient(new android.webkit.WebViewClient() {
+                        @Override
+                        public void onPageFinished(android.webkit.WebView view, String url) {
+                            // Inject config Firebase + tvNum + status awal ke HTML
+                            String js = "initFirebaseSync(" +
+                                "'" + fbApiKey    + "'," +
+                                "'" + fbDbUrl     + "'," +
+                                "'" + fbProjectId + "'," +
+                                fbTvNum + "," +
+                                "'" + initStatus  + "'" +
+                            ")";
+                            view.evaluateJavascript(js, null);
+                        }
+                    });
+
                     wv.loadUrl("file:///android_asset/bayaroverlay.html?bayarStatus=" + currentBayarStatus);
                     bayarOverlayWv = wv;
                     windowManager.addView(bayarOverlayWv, params);
+
+                    // Setup Firebase listener SETELAH WebView siap (di dalam mainHandler)
+                    if (firebaseDb != null) {
+                        bayarStatusRef = firebaseDb.getReference("settings/activeSessions/" + fbTvNum + "/bayarStatus");
+                        bayarStatusListener = new com.google.firebase.database.ValueEventListener() {
+                            @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
+                                final String status = snap.exists() && snap.getValue() != null
+                                    ? snap.getValue(String.class) : "belum";
+                                currentBayarStatus = status;
+                                mainHandler.post(new Runnable() {
+                                    @Override public void run() {
+                                        if (bayarOverlayWv != null) {
+                                            bayarOverlayWv.evaluateJavascript("updateStatus('" + status + "')", null);
+                                        }
+                                    }
+                                });
+                            }
+                            @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
+                        };
+                        bayarStatusRef.addValueEventListener(bayarStatusListener);
+                    }
+
                 } catch (Exception e) {
                     android.util.Log.e("Astrophile", "showBayarOverlay error: " + e.getMessage());
                 }
             }
         });
-
-        // Listen perubahan bayarStatus dari Firebase secara realtime
-        if (firebaseDb != null) {
-            if (bayarOverlayWv != null) { try { windowManager.removeView(bayarOverlayWv); } catch (Exception ignored) {} }
-            if (bayarStatusRef != null && bayarStatusListener != null) {
-                bayarStatusRef.removeEventListener(bayarStatusListener);
-            }
-            bayarStatusRef = firebaseDb.getReference("settings/activeSessions/" + tvNum + "/bayarStatus");
-            bayarStatusListener = new com.google.firebase.database.ValueEventListener() {
-                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
-                    final String status = snap.exists() && snap.getValue() != null
-                        ? snap.getValue(String.class) : "belum";
-                    currentBayarStatus = status;
-                    mainHandler.post(new Runnable() {
-                        @Override public void run() {
-                            if (bayarOverlayWv != null) {
-                                bayarOverlayWv.evaluateJavascript("updateStatus('" + status + "')", null);
-                            }
-                        }
-                    });
-                }
-                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
-            };
-            bayarStatusRef.addValueEventListener(bayarStatusListener);
-        }
     }
 
     private void hideBayarOverlay() {
