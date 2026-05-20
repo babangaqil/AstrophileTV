@@ -160,6 +160,31 @@
 
         </LinearLayout>
 
+        <!-- Update Button — muncul saat ada versi baru -->
+        <Button
+            android:id="@+id/btnUpdate"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="⬇  UPDATE TERSEDIA — KETUK UNTUK UPDATE"
+            android:textColor="#000000"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1"
+            android:backgroundTint="#ffcc00"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"/>
+
+        <TextView
+            android:id="@+id/tvUpdateInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="9sp"
+            android:textColor="#ffcc00"
+            android:gravity="center"
+            android:layout_marginTop="4dp"
+            android:visibility="gone"/>
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
