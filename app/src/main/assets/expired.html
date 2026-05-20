@@ -121,6 +121,36 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
   letter-spacing:2px;margin-top:clamp(6px,1.2%,12px);font-weight:600;
   animation:fi 3s ease-in-out infinite}
 @keyframes fi{0%,100%{opacity:.38}50%{opacity:.80}}
+
+/* ── Sleep countdown ── */
+.sleep-bar{
+  position:absolute;
+  bottom:clamp(10px,2.5%,22px);left:0;right:0;
+  display:flex;flex-direction:column;align-items:center;gap:clamp(4px,.6%,7px);
+  z-index:10;
+}
+.sleep-label{
+  font-family:'Rajdhani',sans-serif;
+  font-size:clamp(7px,.75vw,10px);
+  color:rgba(255,60,60,.38);letter-spacing:3px;font-weight:600;
+  text-transform:uppercase;
+}
+.sleep-track{
+  width:clamp(120px,22%,220px);height:2px;
+  background:rgba(255,0,20,.12);border-radius:2px;overflow:hidden;
+}
+.sleep-fill{
+  height:100%;width:100%;
+  background:linear-gradient(90deg,rgba(255,0,20,.6),rgba(255,80,40,.8));
+  box-shadow:0 0 6px rgba(255,0,20,.5);
+  transform-origin:right;
+  transition:width .95s linear;
+}
+.sleep-num{
+  font-family:'Orbitron',monospace;
+  font-size:clamp(8px,.85vw,11px);font-weight:700;
+  color:rgba(255,60,60,.45);letter-spacing:2px;
+}
 </style>
 </head>
 <body>
@@ -158,6 +188,13 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
       <div class="tvrow">TV 1 &nbsp;·&nbsp; PS4</div>
       <div class="hub">⚡ Hubungi operator</div>
     </div>
+  </div>
+
+  <!-- Sleep countdown bar -->
+  <div class="sleep-bar">
+    <div class="sleep-label">LAYAR SLEEP DALAM</div>
+    <div class="sleep-track"><div class="sleep-fill" id="sleepFill"></div></div>
+    <div class="sleep-num"><span id="sleepSec">10</span> DETIK</div>
   </div>
 </div>
 
@@ -264,6 +301,33 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
   }
   resize();draw();window.addEventListener('resize',resize)
 })()
+// ── Sleep countdown ──
+;(function(){
+  const SLEEP_SEC = 10
+  let remaining = SLEEP_SEC
+  const fillEl = document.getElementById('sleepFill')
+  const secEl  = document.getElementById('sleepSec')
+
+  function tick(){
+    remaining--
+    if(remaining < 0) remaining = 0
+    const pct = (remaining / SLEEP_SEC) * 100
+    if(fillEl) fillEl.style.width = pct + '%'
+    if(secEl)  secEl.textContent  = remaining
+
+    if(remaining <= 0){
+      // Kirim perintah sleep ke Android native
+      try{ Android.onSleepCountdownFinished() }catch(e){}
+      // Fallback: sembunyikan layar via CSS (jika bridge tidak tersedia)
+      document.body.style.transition = 'opacity 1.5s ease'
+      document.body.style.opacity = '0'
+      setTimeout(()=>{ document.body.style.background = '#000' }, 1600)
+      return
+    }
+    setTimeout(tick, 1000)
+  }
+
+  // Mulai setelah 500ms biar render dulu
+  setTimeout(tick, 500)
+})()
 </script>
-</body>
-</html>
