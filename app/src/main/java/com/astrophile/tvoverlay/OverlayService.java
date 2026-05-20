@@ -236,6 +236,34 @@ public class OverlayService extends Service {
             // Auto set offline saat TV mati/disconnect dari internet
             tvStatusRef.child("online").onDisconnect().setValue(false);
 
+            // ── Monitor koneksi Firebase (.info/connected) ──────────
+            // Saat reconnect setelah putus, re-attach semua listener agar sinkron kembali
+            DatabaseReference connectedRef = firebaseDb.getReference(".info/connected");
+            connectedRef.addValueEventListener(new ValueEventListener() {
+                @Override public void onDataChange(DataSnapshot snap) {
+                    boolean connected = Boolean.TRUE.equals(snap.getValue(Boolean.class));
+                    if (connected) {
+                        // Re-attach session listener
+                        if (sessionRef != null && sessionListener != null) {
+                            sessionRef.removeEventListener(sessionListener);
+                            sessionRef.addValueEventListener(sessionListener);
+                            sessionRef.keepSynced(true);
+                        }
+                        // Re-attach tvControl listener
+                        listenTvControl();
+                        // Update status online
+                        tvStatusRef.child("online").setValue(true);
+                        tvStatusRef.child("lastSeen").setValue(System.currentTimeMillis());
+                    } else {
+                        // Offline — jadwalkan reconnect manual setelah 5 detik
+                        mainHandler.postDelayed(() -> {
+                            try { firebaseDb.goOnline(); } catch (Exception ignored) {}
+                        }, 5000);
+                    }
+                }
+                @Override public void onCancelled(DatabaseError e) {}
+            });
+
             // Heartbeat: update lastSeen setiap 30 detik
             mainHandler.post(new Runnable() {
                 @Override public void run() {
@@ -283,6 +311,9 @@ public class OverlayService extends Service {
         mainHandler.post(() -> {
             if (!isAct) {
                 isActive = false;
+                hideAll();
+            } else if ("reserved".equals(mode)) {
+                // Mode reserved = booking dijadwalkan — sembunyikan semua overlay, tampilkan idle
                 hideAll();
             } else if (isExp) {
                 showExpired();
@@ -343,6 +374,13 @@ public class OverlayService extends Service {
         if (secs <= 0) {
             // Waktu habis → tampil fullscreen expired
             widgetView.setVisibility(View.GONE);
+            if (!isExpired) {
+                // Write balik ke Firebase agar kasir langsung tahu — sinkron 2 arah
+                if (sessionRef != null) {
+                    sessionRef.child("expired").setValue(true);
+                    sessionRef.child("active").setValue(true);
+                }
+            }
             showExpired();
             return;
         } else if (secs <= 60) {
@@ -392,6 +430,37 @@ public class OverlayService extends Service {
     // ── EXPIRED ────────────────────────────────────────────────
     private android.webkit.WebView expiredWebView = null;
 
+    // ── JS Bridge untuk expired.html ──────────────────────────
+    public class ExpiredBridge {
+        @android.webkit.JavascriptInterface
+        public void onSleepCountdownFinished() {
+            mainHandler.post(() -> {
+                // Reset state — agar saat wake up Firebase listener tidak trigger showExpired() lagi
+                isExpired   = false;
+                isActive    = false;
+                toast5Shown = false;
+                toast1Shown = false;
+
+                // Sembunyikan semua overlay
+                if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
+                widgetView.setVisibility(android.view.View.GONE);
+                toastView.setVisibility(android.view.View.GONE);
+                expiredView.setVisibility(android.view.View.GONE);
+                stopAlarm();
+
+                // Destroy expiredWebView agar saat showExpired() berikutnya (sesi baru)
+                // countdown sleep mulai dari awal, bukan resume dari state lama
+                try {
+                    if (expiredWebView != null) {
+                        windowManager.removeView(expiredWebView);
+                        expiredWebView.destroy();
+                        expiredWebView = null;
+                    }
+                } catch (Exception e) {}
+            });
+        }
+    }
+
     private void showExpired() {
         if (isExpired) return;
         isExpired   = true;
@@ -429,6 +498,7 @@ public class OverlayService extends Service {
                     injectExpiredData(view);
                 }
             });
+            wv.addJavascriptInterface(new ExpiredBridge(), "Android");
             wv.loadUrl("file:///android_asset/expired.html");
 
             int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
@@ -478,15 +548,48 @@ public class OverlayService extends Service {
     }
 
     private void hideAll() {
-        isActive  = false;
-        isExpired = false;
+        isActive    = false;
+        isExpired   = false;
         toast5Shown = false;
         toast1Shown = false;
+
+        // Widget, toast, expired XML
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
-        // Fix: expiredWebView juga harus disembunyikan di hideAll
+
+        // Expired WebView
         if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
+
+        // Bayar overlay — lepas listener + remove view
+        if (bayarStatusRef != null && bayarStatusListener != null) {
+            bayarStatusRef.removeEventListener(bayarStatusListener);
+            bayarStatusListener = null;
+            bayarStatusRef = null;
+        }
+        try {
+            if (bayarOverlayWv != null) {
+                windowManager.removeView(bayarOverlayWv);
+                bayarOverlayWv = null;
+            }
+        } catch (Exception ignored) {}
+
+        // Sleep view (layar hitam)
+        try {
+            if (sleepView != null) {
+                windowManager.removeView(sleepView);
+                sleepView = null;
+            }
+        } catch (Exception ignored) {}
+
+        // Time overlay (showtime 5 detik)
+        try {
+            if (timeOverlayWv != null) {
+                windowManager.removeView(timeOverlayWv);
+                timeOverlayWv = null;
+            }
+        } catch (Exception ignored) {}
+
         stopAlarm();
     }
 
@@ -1163,12 +1266,17 @@ public class OverlayService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // Reconnect Firebase jika listener terlepas
-        if (sessionRef == null || sessionListener == null) {
+        // Reconnect Firebase penuh saat service di-restart oleh sistem (START_STICKY)
+        if (sessionRef == null || sessionListener == null || firebaseDb == null) {
             initFirebase();
         } else {
+            // Re-attach semua listener sekalian — bukan hanya sessionListener
             sessionRef.removeEventListener(sessionListener);
             sessionRef.addValueEventListener(sessionListener);
+            sessionRef.keepSynced(true);
+            listenTvControl();
+            listenStoreName();
+            try { firebaseDb.goOnline(); } catch (Exception ignored) {}
         }
         return START_STICKY;
     }
