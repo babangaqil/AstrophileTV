@@ -166,10 +166,70 @@ public class SetupActivity extends AppCompatActivity {
 
         // Monitor koneksi live — polling tvStatus/online setiap 5 detik
         startConnectionMonitor(prefs);
+
+        // Bind update button
+        btnUpdate    = findViewById(R.id.btnUpdate);
+        tvUpdateInfo = findViewById(R.id.tvUpdateInfo);
+
+        // Register receiver update dari OverlayService
+        registerUpdateReceiver();
+    }
+
+    private void registerUpdateReceiver() {
+        if (updateReceiver != null) return;
+        updateReceiver = new android.content.BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context ctx, android.content.Intent intent) {
+                if ("com.astrophile.tvoverlay.UPDATE_CLEAR".equals(intent.getAction())) {
+                    runOnUiThread(() -> {
+                        if (btnUpdate    != null) btnUpdate.setVisibility(android.view.View.GONE);
+                        if (tvUpdateInfo != null) tvUpdateInfo.setVisibility(android.view.View.GONE);
+                    });
+                    return;
+                }
+                String version = intent.getStringExtra("version");
+                String url     = intent.getStringExtra("url");
+                String message = intent.getStringExtra("message");
+                showUpdateButton(version, url, message);
+            }
+        };
+        android.content.IntentFilter filter =
+            new android.content.IntentFilter("com.astrophile.tvoverlay.UPDATE_AVAILABLE");
+        filter.addAction("com.astrophile.tvoverlay.UPDATE_CLEAR");
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(updateReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(updateReceiver, filter);
+        }
+    }
+
+    private void showUpdateButton(String version, String url, String message) {
+        if (btnUpdate == null || tvUpdateInfo == null) return;
+        runOnUiThread(() -> {
+            btnUpdate.setVisibility(android.view.View.VISIBLE);
+            tvUpdateInfo.setVisibility(android.view.View.VISIBLE);
+            String label = (version != null && !version.isEmpty())
+                ? message + " (" + version + ")"
+                : (message != null ? message : "Update tersedia");
+            tvUpdateInfo.setText(label);
+            btnUpdate.setOnClickListener(v -> {
+                if (url != null && !url.isEmpty()) {
+                    try {
+                        android.content.Intent i = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(url));
+                        startActivity(i);
+                    } catch (Exception ignored) {}
+                }
+            });
+        });
     }
 
     private android.os.Handler monitorHandler = null;
     private Runnable monitorRunnable = null;
+    private android.widget.Button  btnUpdate    = null;
+    private android.widget.TextView tvUpdateInfo = null;
+    private android.content.BroadcastReceiver updateReceiver = null;
 
     private void startConnectionMonitor(SharedPreferences prefs) {
         if (monitorHandler != null && monitorRunnable != null) {
@@ -227,6 +287,10 @@ public class SetupActivity extends AppCompatActivity {
         super.onDestroy();
         if (monitorHandler != null && monitorRunnable != null)
             monitorHandler.removeCallbacks(monitorRunnable);
+        if (updateReceiver != null) {
+            try { unregisterReceiver(updateReceiver); } catch (Exception ignored) {}
+            updateReceiver = null;
+        }
     }
 
     private void connectAndStart() {
