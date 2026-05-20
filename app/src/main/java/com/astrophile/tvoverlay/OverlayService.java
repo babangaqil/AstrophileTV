@@ -256,15 +256,24 @@ public class OverlayService extends Service {
             return;
         }
 
-        Boolean active  = snapshot.child("active").getValue(Boolean.class);
-        Boolean expired = snapshot.child("expired").getValue(Boolean.class);
-        String  modeVal = snapshot.child("mode").getValue(String.class);
-        Long    start   = snapshot.child("start").getValue(Long.class);
-        Long    dur     = snapshot.child("duration").getValue(Long.class);
-        String  nama    = snapshot.child("namaPelanggan").getValue(String.class);
+        Boolean active     = snapshot.child("active").getValue(Boolean.class);
+        Boolean expired    = snapshot.child("expired").getValue(Boolean.class);
+        Boolean processing = snapshot.child("processing").getValue(Boolean.class);
+        String  modeVal    = snapshot.child("mode").getValue(String.class);
+        Long    start      = snapshot.child("start").getValue(Long.class);
+        Long    dur        = snapshot.child("duration").getValue(Long.class);
+        String  nama       = snapshot.child("namaPelanggan").getValue(String.class);
 
-        boolean isAct = active != null && active;
-        boolean isExp = expired != null && expired;
+        boolean isAct  = active     != null && active;
+        boolean isExp  = expired    != null && expired;
+        boolean isProc = processing != null && processing;
+
+        // "processing" = kasir sedang di popup bayar setelah Stop diklik.
+        // Sembunyikan semua overlay dan tunggu — jangan showWidget lagi.
+        if (isProc || "processing".equals(modeVal)) {
+            mainHandler.post(this::hideAll);
+            return;
+        }
 
         mode          = modeVal != null ? modeVal : "";
         startTime     = start   != null ? start   : 0;
@@ -476,6 +485,8 @@ public class OverlayService extends Service {
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
+        // Fix: expiredWebView juga harus disembunyikan di hideAll
+        if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
         stopAlarm();
     }
 
