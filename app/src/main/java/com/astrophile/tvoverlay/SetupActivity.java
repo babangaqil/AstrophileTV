@@ -173,6 +173,72 @@ public class SetupActivity extends AppCompatActivity {
 
         // Register receiver update dari OverlayService
         registerUpdateReceiver();
+
+        // Cek update langsung saat SetupActivity dibuka — tidak nunggu broadcast
+        checkUpdateFromFirebase(prefs);
+    }
+
+    private void checkUpdateFromFirebase(SharedPreferences prefs) {
+        String apiKey    = prefs.getString("apiKey", "");
+        String dbUrl     = prefs.getString("dbUrl", "");
+        String projectId = prefs.getString("projectId", "");
+        if (apiKey.isEmpty() || dbUrl.isEmpty()) return;
+
+        new Thread(() -> {
+            try {
+                com.google.firebase.FirebaseApp app;
+                try { app = com.google.firebase.FirebaseApp.getInstance("astro_tv"); }
+                catch (Exception e) {
+                    com.google.firebase.FirebaseOptions opts = new com.google.firebase.FirebaseOptions.Builder()
+                        .setApiKey("AIzaSyD8XffAZK8JUOBajCUVyPS-NT9jnwYBats")
+                        .setDatabaseUrl("https://astrophile-rental-default-rtdb.firebaseio.com")
+                        .setProjectId("astrophile-rental")
+                        .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
+                        .build();
+                    app = com.google.firebase.FirebaseApp.initializeApp(this, opts, "astro_tv");
+                }
+                com.google.firebase.database.FirebaseDatabase masterDb =
+                    com.google.firebase.database.FirebaseDatabase.getInstance(app);
+                masterDb.getReference("settings/globalUpdate").get()
+                    .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful() || !task.getResult().exists()) return;
+                        com.google.firebase.database.DataSnapshot snap = task.getResult();
+                        Boolean enabled = snap.child("enabled").getValue(Boolean.class);
+                        if (!Boolean.TRUE.equals(enabled)) return;
+
+                        String minVersion = snap.child("minVersion").getValue(String.class);
+                        String url        = snap.child("url").getValue(String.class);
+                        String message    = snap.child("message").getValue(String.class);
+                        if (minVersion == null || minVersion.isEmpty()) return;
+
+                        String currentVersion = "";
+                        try { currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+                        catch (Exception e) { return; }
+
+                        if (isVersionLower(currentVersion, minVersion)) {
+                            final String fUrl = url != null ? url : "";
+                            final String fMsg = message != null ? message : "Pembaruan tersedia.";
+                            final String fVer = "v" + minVersion;
+                            showUpdateButton(fVer, fUrl, fMsg);
+                        }
+                    });
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
+    private boolean isVersionLower(String current, String minimum) {
+        try {
+            String[] c = current.split("\\.");
+            String[] m = minimum.split("\\.");
+            int len = Math.max(c.length, m.length);
+            for (int i = 0; i < len; i++) {
+                int cv = i < c.length ? Integer.parseInt(c[i].replaceAll("[^0-9]", "")) : 0;
+                int mv = i < m.length ? Integer.parseInt(m[i].replaceAll("[^0-9]", "")) : 0;
+                if (cv < mv) return true;
+                if (cv > mv) return false;
+            }
+            return false;
+        } catch (Exception e) { return false; }
     }
 
     private void registerUpdateReceiver() {
