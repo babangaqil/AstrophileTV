@@ -161,8 +161,72 @@ public class SetupActivity extends AppCompatActivity {
 
         if (!prefs.getString("apiKey", "").isEmpty() && hasOverlayPermission()) {
             startOverlayService();
-            showStatus("Service berjalan | " + deviceId, "#00ff88");
+            showStatus("Terhubung! | " + deviceId, "#00ff88");
         }
+
+        // Monitor koneksi live — polling tvStatus/online setiap 5 detik
+        startConnectionMonitor(prefs);
+    }
+
+    private android.os.Handler monitorHandler = null;
+    private Runnable monitorRunnable = null;
+
+    private void startConnectionMonitor(SharedPreferences prefs) {
+        if (monitorHandler != null && monitorRunnable != null) {
+            monitorHandler.removeCallbacks(monitorRunnable);
+        }
+        monitorHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        String apiKey    = prefs.getString("apiKey", "");
+        String dbUrl     = prefs.getString("dbUrl", "");
+        String projectId = prefs.getString("projectId", "");
+        String deviceId  = LicenseManager.getSavedDeviceId(this);
+        int    tvNum     = prefs.getInt("tvNum", 1);
+
+        if (apiKey.isEmpty() || dbUrl.isEmpty()) return;
+
+        monitorRunnable = new Runnable() {
+            @Override public void run() {
+                try {
+                    com.google.firebase.FirebaseApp monApp;
+                    try { monApp = com.google.firebase.FirebaseApp.getInstance("astro_tv"); }
+                    catch (Exception e) {
+                        com.google.firebase.FirebaseOptions opts = new com.google.firebase.FirebaseOptions.Builder()
+                            .setApiKey(apiKey).setDatabaseUrl(dbUrl).setProjectId(projectId)
+                            .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
+                            .build();
+                        monApp = com.google.firebase.FirebaseApp.initializeApp(SetupActivity.this, opts, "astro_tv");
+                    }
+                    com.google.firebase.database.FirebaseDatabase db =
+                        com.google.firebase.database.FirebaseDatabase.getInstance(monApp);
+                    db.getReference("settings/tvStatus/" + tvNum + "/online")
+                        .get().addOnCompleteListener(task -> {
+                            if (!isFinishing()) {
+                                boolean online = task.isSuccessful() &&
+                                    Boolean.TRUE.equals(task.getResult().getValue(Boolean.class));
+                                showStatus(
+                                    online ? "Terhubung! | " + deviceId : "Terputus — mencoba reconnect...",
+                                    online ? "#00ff88" : "#ffcc00"
+                                );
+                                if (!online) {
+                                    // Paksa restart service jika terputus
+                                    stopService(new android.content.Intent(SetupActivity.this, OverlayService.class));
+                                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
+                                        startOverlayService(), 1000);
+                                }
+                            }
+                        });
+                } catch (Exception ignored) {}
+                if (monitorHandler != null) monitorHandler.postDelayed(this, 5000);
+            }
+        };
+        monitorHandler.postDelayed(monitorRunnable, 3000);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (monitorHandler != null && monitorRunnable != null)
+            monitorHandler.removeCallbacks(monitorRunnable);
     }
 
     private void connectAndStart() {
