@@ -84,6 +84,7 @@ public class OverlayService extends Service {
         // Acquire WakeLock agar Firebase listener tetap aktif di background
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AstrophileTV:overlay");
+        wakeLock.setReferenceCounted(false);
         if (!wakeLock.isHeld()) wakeLock.acquire();
 
         initOverlayViews();
@@ -747,16 +748,41 @@ public class OverlayService extends Service {
     @Override
     public IBinder onBind(Intent intent) { return null; }
 
+    // ── RESTART SAAT APP DI-SWIPE KELUAR ──────────────────────
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        // Jadwalkan restart service 2 detik setelah di-swipe
+        android.app.PendingIntent restartIntent = android.app.PendingIntent.getService(
+            this, 1,
+            new Intent(this, OverlayService.class),
+            android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE
+        );
+        android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+        if (am != null) {
+            am.set(android.app.AlarmManager.ELAPSED_REALTIME,
+                android.os.SystemClock.elapsedRealtime() + 2000,
+                restartIntent);
+        }
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
+        // Restart diri sendiri via Intent agar tetap jalan di background
+        Intent restartSelf = new Intent(getApplicationContext(), OverlayService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(restartSelf);
+        } else {
+            startService(restartSelf);
+        }
         if (tickTimer != null) tickTimer.cancel();
         if (sessionRef != null && sessionListener != null) {
             sessionRef.removeEventListener(sessionListener);
         }
         stopAlarm();
-        // Release WakeLock
-        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        // WakeLock tidak di-release agar Firebase tetap aktif saat restart otomatis
+        // Sistem Android akan release otomatis jika service benar-benar dihentikan paksa
         // Tandai TV offline
         if (firebaseDb != null) {
             try {
