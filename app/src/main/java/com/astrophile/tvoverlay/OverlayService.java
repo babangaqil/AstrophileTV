@@ -654,13 +654,11 @@ public class OverlayService extends Service {
     }
 
     private void showUpdateNotification(String version) {
-        if (updateView != null) return;
-        // Tampilkan info update di overlay kecil
-        android.widget.Toast.makeText(this,
-            "Update v" + version + " tersedia, sedang download...",
-            android.widget.Toast.LENGTH_LONG).show();
+        // Sudah digantikan oleh broadcast ke SetupActivity
+        // Tidak ada overlay yang ditampilkan dari sini
     }
 
+    
     private void downloadAndInstallApk() {
         new Thread(() -> {
             try {
@@ -799,7 +797,7 @@ public class OverlayService extends Service {
             if (bayarStatusRef != null && bayarStatusListener != null) {
                 bayarStatusRef.removeEventListener(bayarStatusListener);
             }
-            if (updateView     != null) windowManager.removeView(updateView);
+            // updateView dihapus — update kini via button di SetupActivity
             if (sleepView      != null) windowManager.removeView(sleepView);
         } catch (Exception e) {}
         if (tts != null) { try { tts.stop(); tts.shutdown(); } catch(Exception ignored){} tts = null; }
@@ -1160,13 +1158,8 @@ public class OverlayService extends Service {
                     if (!snap.exists()) return;
                     Boolean enabled = snap.child("enabled").getValue(Boolean.class);
                     if (!Boolean.TRUE.equals(enabled)) {
-                        // Update dimatikan → sembunyikan overlay update jika ada
-                        mainHandler.post(() -> {
-                            if (updateView != null) {
-                                try { windowManager.removeView(updateView); } catch (Exception ignored) {}
-                                updateView = null;
-                            }
-                        });
+                        // Update dimatikan → kirim broadcast sembunyikan button di SetupActivity
+                        sendBroadcast(new android.content.Intent("com.astrophile.tvoverlay.UPDATE_CLEAR"));
                         return;
                     }
                     String minVersion = snap.child("minVersion").getValue(String.class);
@@ -1224,64 +1217,15 @@ public class OverlayService extends Service {
     }
 
     private void showForceUpdate(String version, String url, String message) {
-        // Sembunyikan semua overlay lain
-        if (widgetView  != null) widgetView.setVisibility(android.view.View.GONE);
-        if (toastView   != null) toastView.setVisibility(android.view.View.GONE);
-        if (expiredView != null) expiredView.setVisibility(android.view.View.GONE);
-        stopAlarm();
-
-        // Tampilkan layar force update fullscreen
-        if (updateView != null) {
-            try { windowManager.removeView(updateView); } catch (Exception ignored) {}
-            updateView = null;
-        }
-
-        android.view.LayoutInflater inflater = android.view.LayoutInflater.from(this);
-        updateView = inflater.inflate(R.layout.overlay_update, null);
-
-        android.widget.TextView tvVersion = updateView.findViewById(R.id.tvUpdateVersion);
-        android.widget.TextView tvMessage = updateView.findViewById(R.id.tvUpdateMessage);
-        android.widget.Button   btnUpdate = updateView.findViewById(R.id.btnUpdate);
-
-        if (tvVersion != null) tvVersion.setText("Versi " + version + " tersedia");
-        if (tvMessage != null) tvMessage.setText(message);
-        if (btnUpdate != null) {
-            btnUpdate.setOnClickListener(v -> {
-                // Sembunyikan overlay dulu saat buka browser
-                if (updateView != null) updateView.setVisibility(android.view.View.GONE);
-
-                if (!url.isEmpty()) {
-                    try {
-                        android.content.Intent i = new android.content.Intent(
-                            android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
-                        i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(i);
-                    } catch (Exception e) {}
-                }
-
-                // Tampilkan kembali saat user balik ke TV app (delay 2 detik)
-                mainHandler.postDelayed(() -> {
-                    if (updateView != null) updateView.setVisibility(android.view.View.VISIBLE);
-                }, 2000);
-            });
-        }
-
-        int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
-            ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            : android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
-
-        android.view.WindowManager.LayoutParams params = new android.view.WindowManager.LayoutParams(
-            android.view.WindowManager.LayoutParams.MATCH_PARENT,
-            android.view.WindowManager.LayoutParams.MATCH_PARENT,
-            overlayType,
-            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-            android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-            android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            android.graphics.PixelFormat.TRANSLUCENT
-        );
-        windowManager.addView(updateView, params);
+        // Jangan tampilkan overlay — kirim broadcast ke SetupActivity agar muncul button update di sana
+        android.content.Intent intent = new android.content.Intent("com.astrophile.tvoverlay.UPDATE_AVAILABLE");
+        intent.putExtra("version", version);
+        intent.putExtra("url",     url != null ? url : "");
+        intent.putExtra("message", message != null ? message : "");
+        sendBroadcast(intent);
     }
 
+    
     private void blockOverlay() {
         LicenseManager.clearLicense(this);
         stopSelf();
