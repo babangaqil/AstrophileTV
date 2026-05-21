@@ -292,6 +292,8 @@ public class SetupActivity extends AppCompatActivity {
                 ? message + " (" + version + ")"
                 : (message != null ? message : "Update tersedia");
             tvUpdateInfo.setText(label);
+            btnUpdate.setFocusable(true);
+            btnUpdate.setClickable(true);
             btnUpdate.setOnClickListener(v -> {
                 if (url != null && !url.isEmpty()) {
                     try {
@@ -302,6 +304,8 @@ public class SetupActivity extends AppCompatActivity {
                     } catch (Exception ignored) {}
                 }
             });
+            // Minta focus agar D-pad remote TV langsung bisa pilih button ini
+            btnUpdate.post(() -> btnUpdate.requestFocus());
         });
     }
 
