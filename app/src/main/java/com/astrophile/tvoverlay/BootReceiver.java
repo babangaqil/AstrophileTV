@@ -17,10 +17,18 @@ public class BootReceiver extends BroadcastReceiver {
         String apiKey = prefs.getString("apiKey", "");
         if (apiKey.isEmpty()) return;
 
-        if (Intent.ACTION_BOOT_COMPLETED.equals(action) ||
-            Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
-            // Auto start setelah boot atau setelah update APK
+        if (Intent.ACTION_BOOT_COMPLETED.equals(action)) {
+            // Auto start setelah boot
             startService(context);
+        } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
+            // APK di-update — stop service lama dulu, tunggu, lalu start versi baru
+            // Ini memastikan service baru yang jalan, bukan service lama yang masih di memori
+            try {
+                context.stopService(new android.content.Intent(context,
+                    com.astrophile.tvoverlay.OverlayService.class));
+            } catch (Exception ignored) {}
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
+                startService(context), 1500);
         } else if ("android.net.conn.CONNECTIVITY_CHANGE".equals(action)) {
             // Jaringan balik online — restart service jika belum jalan
             android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
