@@ -200,8 +200,9 @@ public class OverlayService extends Service {
             }
 
             firebaseDb = FirebaseDatabase.getInstance(app);
-            // Aktifkan persistence agar data tetap diterima saat background
-            try { firebaseDb.setPersistenceEnabled(true); } catch (Exception ignored) {}
+            // setPersistenceEnabled SENGAJA tidak diaktifkan —
+            // cache disk menyebabkan onDataChange dipanggil dengan data lama saat reconnect
+            // Sinkronisasi realtime lebih penting dari offline cache untuk use-case ini
 
             sessionRef = firebaseDb.getReference("settings/activeSessions/" + tvNum);
 
@@ -212,13 +213,17 @@ public class OverlayService extends Service {
                 }
                 @Override
                 public void onCancelled(DatabaseError error) {
-                    // Reconnect otomatis setelah error
+                    // Reconnect otomatis setelah error — goOnline + re-attach listener
                     mainHandler.postDelayed(() -> {
-                        if (sessionRef != null && sessionListener != null) {
-                            sessionRef.removeEventListener(sessionListener);
-                            sessionRef.addValueEventListener(sessionListener);
-                        }
-                    }, 3000);
+                        try { firebaseDb.goOnline(); } catch (Exception ignored) {}
+                        mainHandler.postDelayed(() -> {
+                            if (sessionRef != null && sessionListener != null) {
+                                sessionRef.removeEventListener(sessionListener);
+                                sessionRef.addValueEventListener(sessionListener);
+                                sessionRef.keepSynced(true);
+                            }
+                        }, 500);
+                    }, 2000);
                 }
             };
             sessionRef.addValueEventListener(sessionListener);
@@ -249,6 +254,12 @@ public class OverlayService extends Service {
                             sessionRef.removeEventListener(sessionListener);
                             sessionRef.addValueEventListener(sessionListener);
                             sessionRef.keepSynced(true);
+                            // Force fetch dari server — bypass cache lokal
+                            sessionRef.get().addOnCompleteListener(task -> {
+                                if (task.isSuccessful() && task.getResult() != null) {
+                                    handleFirebaseData(task.getResult());
+                                }
+                            });
                         }
                         // Re-attach tvControl listener (listenTvControl sudah ada removeEventListener internal)
                         mainHandler.postDelayed(() -> {
@@ -341,7 +352,20 @@ public class OverlayService extends Service {
             @Override
             public void run() {
                 mainHandler.post(() -> {
-                    if (isActive && !isExpired) updateWidget();
+                    if (isActive && !isExpired) {
+                        updateWidget();
+                    }
+                    // Watchdog: kalau isActive tapi startTime kosong > 3 detik
+                    // artinya data Firebase belum masuk — paksa re-fetch
+                    if (isActive && startTime == 0) {
+                        if (sessionRef != null) {
+                            sessionRef.get().addOnCompleteListener(task -> {
+                                if (task.isSuccessful() && task.getResult() != null) {
+                                    handleFirebaseData(task.getResult());
+                                }
+                            });
+                        }
+                    }
                 });
             }
         }, 0, 1000);
@@ -1238,11 +1262,50 @@ public class OverlayService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // ── Cek versi — pastikan bukan service lama yang masih jalan setelah update ──
+        int runningVersionCode = getSharedPreferences("astro_tv_svc", MODE_PRIVATE)
+            .getInt("running_version_code", -1);
+        int currentVersionCode = -1;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                currentVersionCode = (int) getPackageManager().getPackageInfo(
+                    getPackageName(),
+                    android.content.pm.PackageManager.PackageInfoFlags.of(0)
+                ).getLongVersionCode();
+            } else {
+                @SuppressWarnings("deprecation")
+                android.content.pm.PackageInfo pi = getPackageManager()
+                    .getPackageInfo(getPackageName(), 0);
+                currentVersionCode = pi.versionCode;
+            }
+        } catch (Exception ignored) {}
+
+        if (runningVersionCode != -1 && currentVersionCode != -1
+                && runningVersionCode != currentVersionCode) {
+            // Versi berbeda = service lama masih jalan setelah APK di-update
+            // Restart diri sendiri agar instance baru yang berjalan
+            android.util.Log.i("AstroTV", "Version changed " + runningVersionCode
+                + " → " + currentVersionCode + ", restarting service...");
+            stopSelf();
+            Intent restartIntent = new Intent(this, OverlayService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(restartIntent);
+            } else {
+                startService(restartIntent);
+            }
+            return START_NOT_STICKY;
+        }
+
+        // Simpan versionCode yang sedang jalan
+        if (currentVersionCode != -1) {
+            getSharedPreferences("astro_tv_svc", MODE_PRIVATE).edit()
+                .putInt("running_version_code", currentVersionCode).apply();
+        }
+
         // Reconnect Firebase penuh saat service di-restart oleh sistem (START_STICKY)
         if (sessionRef == null || sessionListener == null || firebaseDb == null) {
             initFirebase();
         } else {
-            // Re-attach semua listener sekalian — bukan hanya sessionListener
             sessionRef.removeEventListener(sessionListener);
             sessionRef.addValueEventListener(sessionListener);
             sessionRef.keepSynced(true);
