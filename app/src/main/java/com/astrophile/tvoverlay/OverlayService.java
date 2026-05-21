@@ -754,10 +754,14 @@ public class OverlayService extends Service {
     public void onTaskRemoved(Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
         // Jadwalkan restart service 2 detik setelah di-swipe
+        int piFlags = android.app.PendingIntent.FLAG_ONE_SHOT |
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? android.app.PendingIntent.FLAG_IMMUTABLE
+                : android.app.PendingIntent.FLAG_UPDATE_CURRENT);
         android.app.PendingIntent restartIntent = android.app.PendingIntent.getService(
             this, 1,
             new Intent(this, OverlayService.class),
-            android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE
+            piFlags
         );
         android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
         if (am != null) {
