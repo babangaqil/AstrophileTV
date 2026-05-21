@@ -250,11 +250,14 @@ public class OverlayService extends Service {
                             sessionRef.addValueEventListener(sessionListener);
                             sessionRef.keepSynced(true);
                         }
-                        // Re-attach tvControl listener
-                        listenTvControl();
+                        // Re-attach tvControl listener (listenTvControl sudah ada removeEventListener internal)
+                        mainHandler.postDelayed(() -> {
+                            listenTvControl();
+                            listenStoreName();
+                        }, 500);
                         // Update status online
-                        tvStatusRef.child("online").setValue(true);
-                        tvStatusRef.child("lastSeen").setValue(System.currentTimeMillis());
+                        try { tvStatusRef.child("online").setValue(true); } catch (Exception ignored) {}
+                        try { tvStatusRef.child("lastSeen").setValue(System.currentTimeMillis()); } catch (Exception ignored) {}
                     } else {
                         // Offline — jadwalkan reconnect manual setelah 5 detik
                         mainHandler.postDelayed(() -> {
@@ -554,10 +557,10 @@ public class OverlayService extends Service {
         toast5Shown = false;
         toast1Shown = false;
 
-        // Widget, toast, expired XML
-        widgetView.setVisibility(View.GONE);
-        toastView.setVisibility(View.GONE);
-        expiredView.setVisibility(View.GONE);
+        // Widget, toast, expired XML — null-safe
+        if (widgetView  != null) widgetView.setVisibility(View.GONE);
+        if (toastView   != null) toastView.setVisibility(View.GONE);
+        if (expiredView != null) expiredView.setVisibility(View.GONE);
 
         // Expired WebView
         if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
@@ -767,13 +770,8 @@ public class OverlayService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        // Restart diri sendiri via Intent agar tetap jalan di background
-        Intent restartSelf = new Intent(getApplicationContext(), OverlayService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(restartSelf);
-        } else {
-            startService(restartSelf);
-        }
+        // Jangan self-restart dari onDestroy — menyebabkan crash IllegalStateException di Android 12+
+        // Restart sudah ditangani oleh onTaskRemoved + AlarmManager + START_STICKY
         if (tickTimer != null) tickTimer.cancel();
         if (sessionRef != null && sessionListener != null) {
             sessionRef.removeEventListener(sessionListener);
