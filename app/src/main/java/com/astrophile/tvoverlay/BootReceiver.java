@@ -25,8 +25,25 @@ public class BootReceiver extends BroadcastReceiver {
             // Jaringan balik online — restart service jika belum jalan
             android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
                 context.getSystemService(Context.CONNECTIVITY_SERVICE);
-            android.net.NetworkInfo ni = cm != null ? cm.getActiveNetworkInfo() : null;
-            if (ni != null && ni.isConnected()) {
+            boolean connected = false;
+            if (cm != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // API 29+ (Android 10+): pakai NetworkCapabilities
+                    android.net.Network net = cm.getActiveNetwork();
+                    android.net.NetworkCapabilities cap = net != null
+                        ? cm.getNetworkCapabilities(net) : null;
+                    connected = cap != null && (
+                        cap.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                        cap.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                        cap.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET));
+                } else {
+                    // API 21-28 (Android 5-9): getActiveNetworkInfo masih OK
+                    @SuppressWarnings("deprecation")
+                    android.net.NetworkInfo ni = cm.getActiveNetworkInfo();
+                    connected = ni != null && ni.isConnected();
+                }
+            }
+            if (connected) {
                 startService(context);
             }
         }
