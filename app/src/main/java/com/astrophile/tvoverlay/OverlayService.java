@@ -327,16 +327,11 @@ public class OverlayService extends Service {
 
         mainHandler.post(() -> {
             if (!isAct) {
-                if (isExpStop || isExpired) {
-                    // Kasir simpan transaksi setelah expired (expiredStop:true dari Firebase)
-                    // atau AstroTV sudah deteksi expired sendiri — jalankan sleep countdown
-                    isActive = false;
-                    startSleepCountdown();
-                } else {
-                    // Stop manual (sebelum expired) — langsung bersihkan semua overlay
-                    isActive = false;
-                    hideAll();
-                }
+                // active:false dari kasir — bersihkan semua overlay
+                // Sleep countdown sudah jalan otomatis saat waktu habis di AstroTV
+                // Tidak perlu cek isExpired/isExpStop lagi
+                isActive = false;
+                hideAll();
             } else if ("reserved".equals(mode)) {
                 // Mode reserved = booking dijadwalkan — sembunyikan semua overlay, tampilkan idle
                 hideAll();
@@ -418,7 +413,7 @@ public class OverlayService extends Service {
         if (tvTime != null) tvTime.setText(timeStr);
 
         if (secs <= 0) {
-            // Waktu habis → tampil fullscreen expired
+            // Waktu habis → tampil fullscreen expired + langsung countdown sleep
             widgetView.setVisibility(View.GONE);
             if (!isExpired) {
                 // Write balik ke Firebase agar kasir langsung tahu — sinkron 2 arah
@@ -426,8 +421,10 @@ public class OverlayService extends Service {
                     sessionRef.child("expired").setValue(true);
                     sessionRef.child("active").setValue(true);
                 }
+                showExpired();
+                // Langsung mulai countdown sleep tanpa tunggu kasir stop
+                mainHandler.postDelayed(() -> startSleepCountdown(), 500);
             }
-            showExpired();
             return;
         } else if (secs <= 60) {
             // ≤ 1 menit — tampil terus dengan warna merah
@@ -492,7 +489,6 @@ public class OverlayService extends Service {
                 namaPelanggan = "";
 
                 // Destroy expiredWebView — next pelanggan dapat instance baru
-                // sehingga startSleepCountdown() bisa jalan dari awal lagi
                 try {
                     if (expiredWebView != null) {
                         windowManager.removeView(expiredWebView);
@@ -505,6 +501,15 @@ public class OverlayService extends Service {
                 if (widgetView  != null) widgetView.setVisibility(android.view.View.GONE);
                 if (toastView   != null) toastView.setVisibility(android.view.View.GONE);
                 if (expiredView != null) expiredView.setVisibility(android.view.View.GONE);
+
+                // Bersihkan Firebase — set active:false agar kasir tahu TV sudah sleep
+                // dan saat start sesi baru tidak ada sisa expired:true
+                try {
+                    if (sessionRef != null) {
+                        sessionRef.setValue(null); // hapus semua field sekalian
+                    }
+                } catch (Exception ignored) {}
+
                 stopAlarm();
             });
         }
@@ -513,12 +518,19 @@ public class OverlayService extends Service {
     // Dipanggil setelah kasir simpan transaksi — trigger sleep countdown di expired WebView
     private void startSleepCountdown() {
         if (expiredWebView != null) {
-            expiredWebView.post(() ->
-                expiredWebView.evaluateJavascript("window.startSleepCountdown && window.startSleepCountdown()", null)
-            );
+            expiredWebView.post(() -> {
+                // Reset flag dulu agar countdown tidak skip karena _sleepStarted = true
+                expiredWebView.evaluateJavascript(
+                    "window._sleepStarted = false; window.startSleepCountdown && window.startSleepCountdown();",
+                    null
+                );
+            });
         } else {
-            // WebView tidak ada (seharusnya tidak terjadi) — langsung hideAll
-            hideAll();
+            // WebView belum siap — coba lagi setelah 300ms
+            mainHandler.postDelayed(() -> {
+                if (expiredWebView != null) startSleepCountdown();
+                else hideAll();
+            }, 300);
         }
     }
 
@@ -535,8 +547,12 @@ public class OverlayService extends Service {
 
         // Buat WebView overlay untuk expired
         if (expiredWebView != null) {
+            // Reset _sleepStarted agar countdown bisa jalan ulang
+            expiredWebView.evaluateJavascript("window._sleepStarted = false;", null);
             expiredWebView.setVisibility(android.view.View.VISIBLE);
             injectExpiredData(expiredWebView);
+            // Trigger countdown setelah inject data selesai
+            mainHandler.postDelayed(() -> startSleepCountdown(), 600);
             return;
         }
 
@@ -619,8 +635,15 @@ public class OverlayService extends Service {
         if (toastView   != null) toastView.setVisibility(View.GONE);
         if (expiredView != null) expiredView.setVisibility(View.GONE);
 
-        // Expired WebView
-        if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
+        // Expired WebView — destroy sepenuhnya agar JS countdown berhenti
+        // Mencegah countdown lama terpanggil di tengah sesi baru
+        try {
+            if (expiredWebView != null) {
+                windowManager.removeView(expiredWebView);
+                expiredWebView.destroy();
+                expiredWebView = null;
+            }
+        } catch (Exception ignored) {}
 
         // Bayar overlay — lepas listener + remove view
         if (bayarStatusRef != null && bayarStatusListener != null) {
@@ -810,7 +833,17 @@ public class OverlayService extends Service {
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
-        // Jadwalkan restart service 2 detik setelah di-swipe
+        // Service tidak boleh berhenti saat di-swipe — langsung restart
+        // Coba start ulang segera sebagai backup pertama
+        try {
+            Intent immediateRestart = new Intent(this, OverlayService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(immediateRestart);
+            } else {
+                startService(immediateRestart);
+            }
+        } catch (Exception ignored) {}
+        // Jadwalkan restart via AlarmManager sebagai backup kedua
         int piFlags = android.app.PendingIntent.FLAG_ONE_SHOT |
             (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 ? android.app.PendingIntent.FLAG_IMMUTABLE
@@ -822,9 +855,17 @@ public class OverlayService extends Service {
         );
         android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
         if (am != null) {
-            am.set(android.app.AlarmManager.ELAPSED_REALTIME,
-                android.os.SystemClock.elapsedRealtime() + 2000,
-                restartIntent);
+            // setExactAndAllowWhileIdle: restart tepat 2 detik, tidak delay seperti set() di Android 12+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(
+                    android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    android.os.SystemClock.elapsedRealtime() + 2000,
+                    restartIntent);
+            } else {
+                am.set(android.app.AlarmManager.ELAPSED_REALTIME,
+                    android.os.SystemClock.elapsedRealtime() + 2000,
+                    restartIntent);
+            }
         }
     }
 
@@ -846,19 +887,16 @@ public class OverlayService extends Service {
                 firebaseDb.getReference("settings/tvStatus/" + tvNum + "/online").setValue(false);
             } catch (Exception ignored) {}
         }
-        try {
-            if (widgetView     != null) windowManager.removeView(widgetView);
-            if (toastView      != null) windowManager.removeView(toastView);
-            if (expiredView    != null) windowManager.removeView(expiredView);
-            if (expiredWebView  != null) windowManager.removeView(expiredWebView);
-            if (timeOverlayWv  != null) windowManager.removeView(timeOverlayWv);
-            if (bayarOverlayWv != null) { try { windowManager.removeView(bayarOverlayWv); } catch (Exception ignored) {} }
-            if (bayarStatusRef != null && bayarStatusListener != null) {
-                bayarStatusRef.removeEventListener(bayarStatusListener);
-            }
-            // updateView dihapus — update kini via button di SetupActivity
-            if (sleepView      != null) windowManager.removeView(sleepView);
-        } catch (Exception e) {}
+        // Individual try-catch tiap view — satu crash tidak stop cleanup lainnya
+        try { if (widgetView    != null) windowManager.removeView(widgetView);    } catch (Exception ignored) {}
+        try { if (toastView     != null) windowManager.removeView(toastView);     } catch (Exception ignored) {}
+        try { if (expiredView   != null) windowManager.removeView(expiredView);   } catch (Exception ignored) {}
+        try { if (expiredWebView!= null) { expiredWebView.destroy(); windowManager.removeView(expiredWebView); } } catch (Exception ignored) {}
+        try { if (timeOverlayWv != null) windowManager.removeView(timeOverlayWv); } catch (Exception ignored) {}
+        try { if (sleepView     != null) windowManager.removeView(sleepView);     } catch (Exception ignored) {}
+        try { if (bayarOverlayWv!= null) windowManager.removeView(bayarOverlayWv);} catch (Exception ignored) {}
+        try { if (bayarStatusRef != null && bayarStatusListener != null)
+                bayarStatusRef.removeEventListener(bayarStatusListener);          } catch (Exception ignored) {}
         if (tts != null) { try { tts.stop(); tts.shutdown(); } catch(Exception ignored){} tts = null; }
         if (globalUpdateRef != null && globalUpdateListener != null)
             globalUpdateRef.removeEventListener(globalUpdateListener);
