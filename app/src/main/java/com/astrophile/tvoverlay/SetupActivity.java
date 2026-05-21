@@ -215,9 +215,19 @@ public class SetupActivity extends AppCompatActivity {
                         if (minVersion == null || minVersion.isEmpty()) return;
 
                         String currentVersion = "";
-                        try { currentVersion = getPackageManager()
-                            .getPackageInfo(getPackageName(), 0).versionName; }
-                        catch (Exception e) { return; }
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                currentVersion = getPackageManager().getPackageInfo(
+                                    getPackageName(),
+                                    android.content.pm.PackageManager.PackageInfoFlags.of(0)
+                                ).versionName;
+                            } else {
+                                @SuppressWarnings("deprecation")
+                                android.content.pm.PackageInfo pi = getPackageManager()
+                                    .getPackageInfo(getPackageName(), 0);
+                                currentVersion = pi.versionName;
+                            }
+                        } catch (Exception e) { return; }
 
                         if (isVersionLower(currentVersion, minVersion)) {
                             final String fUrl = url != null ? url : "";
@@ -314,42 +324,34 @@ public class SetupActivity extends AppCompatActivity {
 
         if (apiKey.isEmpty() || dbUrl.isEmpty()) return;
 
-        monitorRunnable = new Runnable() {
-            @Override public void run() {
-                try {
-                    com.google.firebase.FirebaseApp monApp;
-                    try { monApp = com.google.firebase.FirebaseApp.getInstance("_tv_license"); }
-                    catch (Exception e) {
-                        com.google.firebase.FirebaseOptions opts = new com.google.firebase.FirebaseOptions.Builder()
-                            .setApiKey(apiKey).setDatabaseUrl(dbUrl).setProjectId(projectId)
-                            .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
-                            .build();
-                        monApp = com.google.firebase.FirebaseApp.initializeApp(SetupActivity.this, opts, "_tv_license");
-                    }
-                    com.google.firebase.database.FirebaseDatabase db =
-                        com.google.firebase.database.FirebaseDatabase.getInstance(monApp);
-                    db.getReference("settings/tvStatus/" + tvNum + "/online")
-                        .get().addOnCompleteListener(task -> {
-                            if (!isFinishing()) {
-                                boolean online = task.isSuccessful() &&
-                                    Boolean.TRUE.equals(task.getResult().getValue(Boolean.class));
-                                showStatus(
-                                    online ? "Terhubung! | " + deviceId : "Terputus — mencoba reconnect...",
-                                    online ? "#00ff88" : "#ffcc00"
-                                );
-                                if (!online) {
-                                    // Paksa restart service jika terputus
-                                    stopService(new android.content.Intent(SetupActivity.this, OverlayService.class));
-                                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
-                                        startOverlayService(), 1000);
-                                }
-                            }
-                        });
-                } catch (Exception ignored) {}
-                if (monitorHandler != null) monitorHandler.postDelayed(this, 5000);
-            }
-        };
-        monitorHandler.postDelayed(monitorRunnable, 3000);
+        // ── Gunakan Firebase TOKO (dbUrl toko) bukan Master ──────────────
+        // tvStatus/online ditulis oleh OverlayService ke Firebase toko
+        com.google.firebase.FirebaseApp tokoApp;
+        try { tokoApp = com.google.firebase.FirebaseApp.getInstance("_toko_monitor"); }
+        catch (Exception e) {
+            com.google.firebase.FirebaseOptions opts = new com.google.firebase.FirebaseOptions.Builder()
+                .setApiKey(apiKey).setDatabaseUrl(dbUrl).setProjectId(projectId)
+                .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
+                .build();
+            tokoApp = com.google.firebase.FirebaseApp.initializeApp(this, opts, "_toko_monitor");
+        }
+        com.google.firebase.database.FirebaseDatabase tokoDB =
+            com.google.firebase.database.FirebaseDatabase.getInstance(tokoApp);
+
+        // ── Listener realtime — lebih efisien dari polling .get() ─────────
+        // Tidak perlu restart service dari sini — service manage dirinya sendiri
+        tokoDB.getReference("settings/tvStatus/" + tvNum + "/online")
+            .addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
+                    if (isFinishing()) return;
+                    boolean online = Boolean.TRUE.equals(snap.getValue(Boolean.class));
+                    showStatus(
+                        online ? "Terhubung! | " + deviceId : "Menghubungkan...",
+                        online ? "#00ff88" : "#ffcc00"
+                    );
+                }
+                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
+            });
     }
 
     @Override
