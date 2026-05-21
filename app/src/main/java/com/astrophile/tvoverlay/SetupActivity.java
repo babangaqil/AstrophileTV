@@ -184,10 +184,11 @@ public class SetupActivity extends AppCompatActivity {
         String projectId = prefs.getString("projectId", "");
         if (apiKey.isEmpty() || dbUrl.isEmpty()) return;
 
-        new Thread(() -> {
+        // Firebase init & query harus di main thread
+        runOnUiThread(() -> {
             try {
                 com.google.firebase.FirebaseApp app;
-                try { app = com.google.firebase.FirebaseApp.getInstance("astro_tv"); }
+                try { app = com.google.firebase.FirebaseApp.getInstance("_tv_license"); }
                 catch (Exception e) {
                     com.google.firebase.FirebaseOptions opts = new com.google.firebase.FirebaseOptions.Builder()
                         .setApiKey("AIzaSyD8XffAZK8JUOBajCUVyPS-NT9jnwYBats")
@@ -195,13 +196,15 @@ public class SetupActivity extends AppCompatActivity {
                         .setProjectId("astrophile-rental")
                         .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
                         .build();
-                    app = com.google.firebase.FirebaseApp.initializeApp(this, opts, "astro_tv");
+                    app = com.google.firebase.FirebaseApp.initializeApp(
+                        SetupActivity.this, opts, "_tv_license");
                 }
                 com.google.firebase.database.FirebaseDatabase masterDb =
                     com.google.firebase.database.FirebaseDatabase.getInstance(app);
                 masterDb.getReference("settings/globalUpdate").get()
                     .addOnCompleteListener(task -> {
-                        if (!task.isSuccessful() || !task.getResult().exists()) return;
+                        if (!task.isSuccessful() || task.getResult() == null
+                                || !task.getResult().exists()) return;
                         com.google.firebase.database.DataSnapshot snap = task.getResult();
                         Boolean enabled = snap.child("enabled").getValue(Boolean.class);
                         if (!Boolean.TRUE.equals(enabled)) return;
@@ -212,7 +215,8 @@ public class SetupActivity extends AppCompatActivity {
                         if (minVersion == null || minVersion.isEmpty()) return;
 
                         String currentVersion = "";
-                        try { currentVersion = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+                        try { currentVersion = getPackageManager()
+                            .getPackageInfo(getPackageName(), 0).versionName; }
                         catch (Exception e) { return; }
 
                         if (isVersionLower(currentVersion, minVersion)) {
@@ -223,7 +227,7 @@ public class SetupActivity extends AppCompatActivity {
                         }
                     });
             } catch (Exception ignored) {}
-        }).start();
+        });
     }
 
     private boolean isVersionLower(String current, String minimum) {
@@ -314,13 +318,13 @@ public class SetupActivity extends AppCompatActivity {
             @Override public void run() {
                 try {
                     com.google.firebase.FirebaseApp monApp;
-                    try { monApp = com.google.firebase.FirebaseApp.getInstance("astro_tv"); }
+                    try { monApp = com.google.firebase.FirebaseApp.getInstance("_tv_license"); }
                     catch (Exception e) {
                         com.google.firebase.FirebaseOptions opts = new com.google.firebase.FirebaseOptions.Builder()
                             .setApiKey(apiKey).setDatabaseUrl(dbUrl).setProjectId(projectId)
                             .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
                             .build();
-                        monApp = com.google.firebase.FirebaseApp.initializeApp(SetupActivity.this, opts, "astro_tv");
+                        monApp = com.google.firebase.FirebaseApp.initializeApp(SetupActivity.this, opts, "_tv_license");
                     }
                     com.google.firebase.database.FirebaseDatabase db =
                         com.google.firebase.database.FirebaseDatabase.getInstance(monApp);
