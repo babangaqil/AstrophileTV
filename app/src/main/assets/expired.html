@@ -190,8 +190,8 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
     </div>
   </div>
 
-  <!-- Sleep countdown bar -->
-  <div class="sleep-bar">
+  <!-- Sleep countdown bar — hidden by default, muncul setelah kasir simpan transaksi -->
+  <div class="sleep-bar" id="sleepBar" style="display:none">
     <div class="sleep-label">LAYAR SLEEP DALAM</div>
     <div class="sleep-track"><div class="sleep-fill" id="sleepFill"></div></div>
     <div class="sleep-num"><span id="sleepSec">10</span> DETIK</div>
@@ -302,11 +302,21 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
   resize();draw();window.addEventListener('resize',resize)
 })()
 // ── Sleep countdown ──
-;(function(){
-  const SLEEP_SEC = 10
-  let remaining = SLEEP_SEC
+// Tidak auto-start — dipanggil dari Android setelah kasir simpan transaksi
+const SLEEP_SEC = 10
+let _sleepStarted = false
+
+window.startSleepCountdown = function() {
+  if (_sleepStarted) return
+  _sleepStarted = true
+
+  const bar    = document.getElementById('sleepBar')
   const fillEl = document.getElementById('sleepFill')
   const secEl  = document.getElementById('sleepSec')
+
+  if (bar) bar.style.display = 'flex'
+
+  let remaining = SLEEP_SEC
 
   function tick(){
     remaining--
@@ -316,9 +326,7 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
     if(secEl)  secEl.textContent  = remaining
 
     if(remaining <= 0){
-      // Kirim perintah sleep ke Android native
       try{ Android.onSleepCountdownFinished() }catch(e){}
-      // Fallback: sembunyikan layar via CSS (jika bridge tidak tersedia)
       document.body.style.transition = 'opacity 1.5s ease'
       document.body.style.opacity = '0'
       setTimeout(()=>{ document.body.style.background = '#000' }, 1600)
@@ -327,7 +335,6 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
     setTimeout(tick, 1000)
   }
 
-  // Mulai setelah 500ms biar render dulu
   setTimeout(tick, 500)
-})()
+}
 </script>
