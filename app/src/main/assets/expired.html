@@ -190,8 +190,8 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
     </div>
   </div>
 
-  <!-- Sleep countdown bar — hidden by default, muncul setelah kasir simpan transaksi -->
-  <div class="sleep-bar" id="sleepBar" style="display:none">
+  <!-- Sleep countdown bar — langsung muncul saat overlay tampil -->
+  <div class="sleep-bar" id="sleepBar">
     <div class="sleep-label">LAYAR SLEEP DALAM</div>
     <div class="sleep-track"><div class="sleep-fill" id="sleepFill"></div></div>
     <div class="sleep-num"><span id="sleepSec">10</span> DETIK</div>
@@ -306,6 +306,7 @@ body{background:#000;display:flex;align-items:center;justify-content:center;min-
 const SLEEP_SEC = 10
 let _sleepStarted = false
 
+// Auto-start saat halaman load
 window.startSleepCountdown = function() {
   if (_sleepStarted) return
   _sleepStarted = true
@@ -313,8 +314,6 @@ window.startSleepCountdown = function() {
   const bar    = document.getElementById('sleepBar')
   const fillEl = document.getElementById('sleepFill')
   const secEl  = document.getElementById('sleepSec')
-
-  if (bar) bar.style.display = 'flex'
 
   let remaining = SLEEP_SEC
 
@@ -337,4 +336,7 @@ window.startSleepCountdown = function() {
 
   setTimeout(tick, 500)
 }
+
+// Langsung start saat overlay muncul
+window.addEventListener('load', () => window.startSleepCountdown())
 </script>
