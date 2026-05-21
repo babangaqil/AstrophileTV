@@ -342,6 +342,7 @@ public class SetupActivity extends AppCompatActivity {
         // Tidak perlu restart service dari sini — service manage dirinya sendiri
         tokoDB.getReference("settings/tvStatus/" + tvNum + "/online")
             .addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+                boolean[] wasPreviouslyOnline = {false};
                 @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
                     if (isFinishing()) return;
                     boolean online = Boolean.TRUE.equals(snap.getValue(Boolean.class));
@@ -349,6 +350,17 @@ public class SetupActivity extends AppCompatActivity {
                         online ? "Terhubung! | " + deviceId : "Menghubungkan...",
                         online ? "#00ff88" : "#ffcc00"
                     );
+                    if (online) {
+                        wasPreviouslyOnline[0] = true;
+                    } else if (wasPreviouslyOnline[0]) {
+                        // Sempat online lalu offline (service restart setelah update)
+                        // Auto-reconnect tanpa perlu operator klik manual
+                        wasPreviouslyOnline[0] = false;
+                        new android.os.Handler(android.os.Looper.getMainLooper())
+                            .postDelayed(() -> {
+                                if (!isFinishing()) startOverlayService();
+                            }, 2000);
+                    }
                 }
                 @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
             });
