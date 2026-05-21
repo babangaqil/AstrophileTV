@@ -299,17 +299,19 @@ public class OverlayService extends Service {
             return;
         }
 
-        Boolean active     = snapshot.child("active").getValue(Boolean.class);
-        Boolean expired    = snapshot.child("expired").getValue(Boolean.class);
-        Boolean processing = snapshot.child("processing").getValue(Boolean.class);
-        String  modeVal    = snapshot.child("mode").getValue(String.class);
-        Long    start      = snapshot.child("start").getValue(Long.class);
-        Long    dur        = snapshot.child("duration").getValue(Long.class);
-        String  nama       = snapshot.child("namaPelanggan").getValue(String.class);
+        Boolean active      = snapshot.child("active").getValue(Boolean.class);
+        Boolean expired     = snapshot.child("expired").getValue(Boolean.class);
+        Boolean processing  = snapshot.child("processing").getValue(Boolean.class);
+        Boolean expiredStop = snapshot.child("expiredStop").getValue(Boolean.class);
+        String  modeVal     = snapshot.child("mode").getValue(String.class);
+        Long    start       = snapshot.child("start").getValue(Long.class);
+        Long    dur         = snapshot.child("duration").getValue(Long.class);
+        String  nama        = snapshot.child("namaPelanggan").getValue(String.class);
 
-        boolean isAct  = active     != null && active;
-        boolean isExp  = expired    != null && expired;
-        boolean isProc = processing != null && processing;
+        boolean isAct      = active      != null && active;
+        boolean isExp      = expired     != null && expired;
+        boolean isProc     = processing  != null && processing;
+        boolean isExpStop  = expiredStop != null && expiredStop;
 
         // "processing" = kasir sedang di popup bayar setelah Stop diklik.
         // Sembunyikan semua overlay dan tunggu — jangan showWidget lagi.
@@ -325,13 +327,13 @@ public class OverlayService extends Service {
 
         mainHandler.post(() -> {
             if (!isAct) {
-                if (isExpired) {
-                    // Kasir sudah simpan transaksi setelah expired
-                    // Jangan hideAll dulu — jalankan sleep countdown di overlay expired
+                if (isExpStop || isExpired) {
+                    // Kasir simpan transaksi setelah expired (expiredStop:true dari Firebase)
+                    // atau AstroTV sudah deteksi expired sendiri — jalankan sleep countdown
                     isActive = false;
                     startSleepCountdown();
                 } else {
-                    // Stop normal (sebelum expired) — langsung bersihkan semua overlay
+                    // Stop manual (sebelum expired) — langsung bersihkan semua overlay
                     isActive = false;
                     hideAll();
                 }
@@ -1313,18 +1315,17 @@ public class OverlayService extends Service {
 
         if (runningVersionCode != -1 && currentVersionCode != -1
                 && runningVersionCode != currentVersionCode) {
-            // Versi berbeda = service lama masih jalan setelah APK di-update
-            // Restart diri sendiri agar instance baru yang berjalan
-            android.util.Log.i("AstroTV", "Version changed " + runningVersionCode
-                + " → " + currentVersionCode + ", restarting service...");
-            stopSelf();
-            Intent restartIntent = new Intent(this, OverlayService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(restartIntent);
-            } else {
-                startService(restartIntent);
-            }
-            return START_NOT_STICKY;
+            // Versi berbeda setelah APK update — update SharedPrefs dan lanjut init normal
+            // Tidak perlu stopSelf()+restart — BootReceiver sudah handle stop+start saat MY_PACKAGE_REPLACED
+            // Manual restart di sini bisa menyebabkan double instance dan overlay tidak muncul
+            android.util.Log.i("AstroTV", "Version updated " + runningVersionCode
+                + " → " + currentVersionCode + ", reinitializing...");
+            getSharedPreferences("astro_tv_svc", MODE_PRIVATE).edit()
+                .putInt("running_version_code", currentVersionCode).apply();
+            // Reinit semua: overlay views + Firebase listeners
+            try { initOverlayViews(); } catch (Exception ignored) {}
+            initFirebase();
+            return START_STICKY;
         }
 
         // Simpan versionCode yang sedang jalan
