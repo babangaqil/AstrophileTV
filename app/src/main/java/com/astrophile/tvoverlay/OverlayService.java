@@ -325,8 +325,16 @@ public class OverlayService extends Service {
 
         mainHandler.post(() -> {
             if (!isAct) {
-                isActive = false;
-                hideAll();
+                if (isExpired) {
+                    // Kasir sudah simpan transaksi setelah expired
+                    // Jangan hideAll dulu — jalankan sleep countdown di overlay expired
+                    isActive = false;
+                    startSleepCountdown();
+                } else {
+                    // Stop normal (sebelum expired) — langsung bersihkan semua overlay
+                    isActive = false;
+                    hideAll();
+                }
             } else if ("reserved".equals(mode)) {
                 // Mode reserved = booking dijadwalkan — sembunyikan semua overlay, tampilkan idle
                 hideAll();
@@ -335,10 +343,18 @@ public class OverlayService extends Service {
             } else {
                 isExpired = false;
                 isActive  = true;
+                // Destroy expiredWebView lama agar next pelanggan dapat instance baru
+                // (penting: _sleepStarted di JS harus reset, destroy = reset otomatis)
+                try {
+                    if (expiredWebView != null) {
+                        windowManager.removeView(expiredWebView);
+                        expiredWebView.destroy();
+                        expiredWebView = null;
+                    }
+                } catch (Exception ignored) {}
                 hideExpired();
                 if (startTime > 0) {
                     showWidget();
-                    // Langsung update widget saat duration berubah (bonus/tambah waktu)
                     updateWidget();
                 }
             }
@@ -463,29 +479,44 @@ public class OverlayService extends Service {
         @android.webkit.JavascriptInterface
         public void onSleepCountdownFinished() {
             mainHandler.post(() -> {
-                // Reset state — agar saat wake up Firebase listener tidak trigger showExpired() lagi
+                // ── Full reset untuk next pelanggan ────────────────────
                 isExpired   = false;
                 isActive    = false;
                 toast5Shown = false;
                 toast1Shown = false;
+                startTime   = 0;
+                duration    = 0;
+                mode        = "";
+                namaPelanggan = "";
 
-                // Sembunyikan semua overlay
-                if (expiredWebView != null) expiredWebView.setVisibility(android.view.View.GONE);
-                widgetView.setVisibility(android.view.View.GONE);
-                toastView.setVisibility(android.view.View.GONE);
-                expiredView.setVisibility(android.view.View.GONE);
-                stopAlarm();
-
-                // Destroy expiredWebView agar saat showExpired() berikutnya (sesi baru)
-                // countdown sleep mulai dari awal, bukan resume dari state lama
+                // Destroy expiredWebView — next pelanggan dapat instance baru
+                // sehingga startSleepCountdown() bisa jalan dari awal lagi
                 try {
                     if (expiredWebView != null) {
                         windowManager.removeView(expiredWebView);
                         expiredWebView.destroy();
                         expiredWebView = null;
                     }
-                } catch (Exception e) {}
+                } catch (Exception ignored) {}
+
+                // Sembunyikan semua overlay lainnya
+                if (widgetView  != null) widgetView.setVisibility(android.view.View.GONE);
+                if (toastView   != null) toastView.setVisibility(android.view.View.GONE);
+                if (expiredView != null) expiredView.setVisibility(android.view.View.GONE);
+                stopAlarm();
             });
+        }
+    }
+
+    // Dipanggil setelah kasir simpan transaksi — trigger sleep countdown di expired WebView
+    private void startSleepCountdown() {
+        if (expiredWebView != null) {
+            expiredWebView.post(() ->
+                expiredWebView.evaluateJavascript("window.startSleepCountdown && window.startSleepCountdown()", null)
+            );
+        } else {
+            // WebView tidak ada (seharusnya tidak terjadi) — langsung hideAll
+            hideAll();
         }
     }
 
