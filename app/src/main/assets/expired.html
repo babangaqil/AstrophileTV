@@ -325,10 +325,14 @@ window.startSleepCountdown = function() {
     if(secEl)  secEl.textContent  = remaining
 
     if(remaining <= 0){
-      try{ Android.onSleepCountdownFinished() }catch(e){}
-      document.body.style.transition = 'opacity 1.5s ease'
+      // Fade out dulu, baru beritahu Android
+      document.body.style.transition = 'opacity 1.2s ease'
       document.body.style.opacity = '0'
-      setTimeout(()=>{ document.body.style.background = '#000' }, 1600)
+      // Tunggu animasi fade selesai baru panggil Java bridge
+      // Memberi waktu cukup sebelum WebView di-destroy
+      setTimeout(function(){
+        try{ Android.onSleepCountdownFinished() }catch(e){}
+      }, 1300)
       return
     }
     setTimeout(tick, 1000)
