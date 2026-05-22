@@ -63,6 +63,7 @@ public class OverlayService extends Service {
     private boolean isActive = false;
     private long startTime = 0;
     private long duration = 0;
+    private long pausedAt  = 0;  // timestamp saat di-pause (0 = tidak pause)
     private String  currentBayarStatus = "belum"; // dipakai showBayarOverlay
     private String mode = "";
     private String namaPelanggan = "";
@@ -307,11 +308,13 @@ public class OverlayService extends Service {
         Long    start       = snapshot.child("start").getValue(Long.class);
         Long    dur         = snapshot.child("duration").getValue(Long.class);
         String  nama        = snapshot.child("namaPelanggan").getValue(String.class);
+        Long    pausedAtVal = snapshot.child("pausedAt").getValue(Long.class);
 
         boolean isAct      = active      != null && active;
         boolean isExp      = expired     != null && expired;
         boolean isProc     = processing  != null && processing;
         boolean isExpStop  = expiredStop != null && expiredStop;
+        pausedAt           = pausedAtVal != null ? pausedAtVal : 0;
 
         // "processing" = kasir sedang di popup bayar setelah Stop diklik.
         // Sembunyikan semua overlay dan tunggu — jangan showWidget lagi.
@@ -422,8 +425,8 @@ public class OverlayService extends Service {
                     sessionRef.child("active").setValue(true);
                 }
                 showExpired();
-                // Langsung mulai countdown sleep tanpa tunggu kasir stop
-                mainHandler.postDelayed(() -> startSleepCountdown(), 500);
+                // startSleepCountdown dipanggil dari onPageFinished WebView
+                // agar dipastikan HTML sudah load sebelum countdown dimulai
             }
             return;
         } else if (secs <= 60) {
@@ -485,29 +488,32 @@ public class OverlayService extends Service {
                 toast1Shown = false;
                 startTime   = 0;
                 duration    = 0;
+                pausedAt    = 0;
                 mode        = "";
                 namaPelanggan = "";
 
-                // Destroy expiredWebView — next pelanggan dapat instance baru
-                try {
-                    if (expiredWebView != null) {
-                        windowManager.removeView(expiredWebView);
-                        expiredWebView.destroy();
-                        expiredWebView = null;
-                    }
-                } catch (Exception ignored) {}
+                // Tampilkan layar hitam dulu (sleep view) — transisi mulus
+                showSleep();
+
+                // Destroy expiredWebView setelah layar hitam sudah di atas
+                mainHandler.postDelayed(() -> {
+                    try {
+                        if (expiredWebView != null) {
+                            windowManager.removeView(expiredWebView);
+                            expiredWebView.destroy();
+                            expiredWebView = null;
+                        }
+                    } catch (Exception ignored) {}
+                }, 200);
 
                 // Sembunyikan semua overlay lainnya
                 if (widgetView  != null) widgetView.setVisibility(android.view.View.GONE);
                 if (toastView   != null) toastView.setVisibility(android.view.View.GONE);
                 if (expiredView != null) expiredView.setVisibility(android.view.View.GONE);
 
-                // Bersihkan Firebase — set active:false agar kasir tahu TV sudah sleep
-                // dan saat start sesi baru tidak ada sisa expired:true
+                // Bersihkan Firebase
                 try {
-                    if (sessionRef != null) {
-                        sessionRef.setValue(null); // hapus semua field sekalian
-                    }
+                    if (sessionRef != null) sessionRef.setValue(null);
                 } catch (Exception ignored) {}
 
                 stopAlarm();
@@ -517,21 +523,25 @@ public class OverlayService extends Service {
 
     // Dipanggil setelah kasir simpan transaksi — trigger sleep countdown di expired WebView
     private void startSleepCountdown() {
-        if (expiredWebView != null) {
-            expiredWebView.post(() -> {
-                // Reset flag dulu agar countdown tidak skip karena _sleepStarted = true
-                expiredWebView.evaluateJavascript(
-                    "window._sleepStarted = false; window.startSleepCountdown && window.startSleepCountdown();",
-                    null
-                );
-            });
-        } else {
-            // WebView belum siap — coba lagi setelah 300ms
-            mainHandler.postDelayed(() -> {
-                if (expiredWebView != null) startSleepCountdown();
-                else hideAll();
-            }, 300);
-        }
+        if (expiredWebView == null) return; // onPageFinished akan panggil lagi saat WebView siap
+        final android.webkit.WebView wv = expiredWebView;
+        wv.post(() -> wv.evaluateJavascript(
+            "window._sleepStarted = false;" +
+            "if(typeof window.startSleepCountdown==='function') window.startSleepCountdown();",
+            result -> {
+                // Kalau function belum ada (race condition), coba sekali lagi 500ms kemudian
+                if ("null".equals(result) || result == null) {
+                    mainHandler.postDelayed(() -> {
+                        if (expiredWebView != null) {
+                            expiredWebView.evaluateJavascript(
+                                "window._sleepStarted=false;" +
+                                "if(typeof window.startSleepCountdown==='function') window.startSleepCountdown();",
+                                null);
+                        }
+                    }, 500);
+                }
+            }
+        ));
     }
 
     private void showExpired() {
@@ -551,8 +561,8 @@ public class OverlayService extends Service {
             expiredWebView.evaluateJavascript("window._sleepStarted = false;", null);
             expiredWebView.setVisibility(android.view.View.VISIBLE);
             injectExpiredData(expiredWebView);
-            // Trigger countdown setelah inject data selesai
-            mainHandler.postDelayed(() -> startSleepCountdown(), 600);
+            // WebView sudah ada dan loaded — langsung start countdown
+            mainHandler.postDelayed(() -> startSleepCountdown(), 200);
             return;
         }
 
@@ -573,6 +583,9 @@ public class OverlayService extends Service {
                 @Override
                 public void onPageFinished(android.webkit.WebView view, String url) {
                     injectExpiredData(view);
+                    // Halaman sudah load — langsung start countdown sleep
+                    // Delay 300ms biar injectExpiredData selesai render dulu
+                    mainHandler.postDelayed(() -> startSleepCountdown(), 300);
                 }
             });
             wv.addJavascriptInterface(new ExpiredBridge(), "Android");
@@ -1140,14 +1153,16 @@ public class OverlayService extends Service {
 
     private void showTimeOverlay() {
         if (!isActive) return;
-        // Hitung sisa waktu
-        long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+        // Hitung sisa waktu — perhatikan kondisi pause
+        long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+        long elapsed = (effectiveNow - startTime) / 1000;
         long sisa = Math.max(0, duration - elapsed);
         final String timeStr = formatTime(sisa);
         final String modeVal = (mode != null) ? mode : "countdown";
         final int tvNumVal = tvNum;
         final long totalSec = duration;
         final long sisaSec = sisa;
+        final boolean isPaused = pausedAt > 0;
 
         mainHandler.post(new Runnable() {
             @Override public void run() {
@@ -1187,7 +1202,8 @@ public class OverlayService extends Service {
                         + "&totalSec=" + totalSec
                         + "&sisaSec=" + sisaSec
                         + "&fbStartTime=" + startTime
-                        + "&loadMs=" + System.currentTimeMillis();
+                        + "&loadMs=" + System.currentTimeMillis()
+                        + "&paused=" + (isPaused ? "1" : "0");
                     wv.loadUrl(url);
                     timeOverlayWv = wv;
                     windowManager.addView(timeOverlayWv, params);
