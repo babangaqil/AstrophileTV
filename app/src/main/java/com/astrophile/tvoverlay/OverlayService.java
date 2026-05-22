@@ -170,9 +170,9 @@ public class OverlayService extends Service {
             PixelFormat.TRANSLUCENT
         );
 
-        windowManager.addView(widgetView, widgetParams);
-        windowManager.addView(toastView, toastParams);
-        windowManager.addView(expiredView, expiredParams);
+        try { windowManager.addView(widgetView,  widgetParams);  } catch (Exception ignored) {}
+        try { windowManager.addView(toastView,   toastParams);   } catch (Exception ignored) {}
+        try { windowManager.addView(expiredView, expiredParams); } catch (Exception ignored) {}
     }
 
     // ── FIREBASE ───────────────────────────────────────────────
@@ -330,11 +330,16 @@ public class OverlayService extends Service {
 
         mainHandler.post(() -> {
             if (!isAct) {
-                // active:false dari kasir — bersihkan semua overlay
-                // Sleep countdown sudah jalan otomatis saat waktu habis di AstroTV
-                // Tidak perlu cek isExpired/isExpStop lagi
                 isActive = false;
-                hideAll();
+                if (isExpired) {
+                    // Waktu habis + operator Stop manual saat countdown sleep jalan
+                    // Tampilkan layar hitam dulu agar tidak "nyala" setelah overlay hilang
+                    showSleep();
+                    mainHandler.postDelayed(() -> hideAll(), 300);
+                } else {
+                    // Stop normal sebelum expired — langsung bersihkan semua overlay
+                    hideAll();
+                }
             } else if ("reserved".equals(mode)) {
                 // Mode reserved = booking dijadwalkan — sembunyikan semua overlay, tampilkan idle
                 hideAll();
@@ -344,12 +349,19 @@ public class OverlayService extends Service {
                 isExpired = false;
                 isActive  = true;
                 // Destroy expiredWebView lama agar next pelanggan dapat instance baru
-                // (penting: _sleepStarted di JS harus reset, destroy = reset otomatis)
                 try {
                     if (expiredWebView != null) {
                         windowManager.removeView(expiredWebView);
                         expiredWebView.destroy();
                         expiredWebView = null;
+                    }
+                } catch (Exception ignored) {}
+                // Hapus sleepView (layar hitam) jika masih ada dari sesi sebelumnya
+                // Ini yang bikin layar tetap hitam saat sesi baru mulai setelah sleep
+                try {
+                    if (sleepView != null) {
+                        windowManager.removeView(sleepView);
+                        sleepView = null;
                     }
                 } catch (Exception ignored) {}
                 hideExpired();
@@ -369,7 +381,7 @@ public class OverlayService extends Service {
             public void run() {
                 mainHandler.post(() -> {
                     if (isActive && !isExpired) {
-                        updateWidget();
+                        updateWidget(); // updateWidget sudah handle pausedAt internal
                     }
                     // Watchdog: kalau isActive tapi startTime kosong > 3 detik
                     // artinya data Firebase belum masuk — paksa re-fetch
@@ -396,17 +408,31 @@ public class OverlayService extends Service {
     private void updateWidget() {
         if (!isActive || startTime == 0) return;
 
-        long now = System.currentTimeMillis();
+        // Saat paused: gunakan waktu saat pause sebagai acuan (bukan sekarang)
+        long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
         long secs;
         boolean isCountdown = "countdown".equals(mode);
 
         if (isCountdown) {
-            long elapsed = (now - startTime) / 1000;
+            long elapsed = (effectiveNow - startTime) / 1000;
             secs = Math.max(0, duration - elapsed);
         } else {
             // Billing mode — tidak tampilkan widget sama sekali
             widgetView.setVisibility(View.GONE);
             return;
+        }
+
+        // Saat paused — tampilkan sisa waktu tapi tidak update expired trigger
+        if (pausedAt > 0) {
+            String pausedStr = formatTime(secs);
+            TextView tvTimePaused = widgetView.findViewById(R.id.tvWidgetTime);
+            TextView tvLblPaused  = widgetView.findViewById(R.id.tvWidgetLabel);
+            if (tvTimePaused != null) tvTimePaused.setText(pausedStr);
+            if (tvLblPaused  != null) tvLblPaused.setText("⏸ DIJEDA");
+            if (secs <= 60)       widgetView.setVisibility(View.VISIBLE);
+            else if (secs <= 300) widgetView.setVisibility(View.VISIBLE);
+            else                  widgetView.setVisibility(View.GONE);
+            return; // jangan proses expired/toast saat paused
         }
 
         String timeStr = formatTime(secs);
@@ -606,7 +632,7 @@ public class OverlayService extends Service {
             lp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
 
             expiredWebView = wv;
-            windowManager.addView(expiredWebView, lp);
+            try { windowManager.addView(expiredWebView, lp); } catch (Exception ignored) {}
         } catch (Exception e) {}
 
         playAlarm();
@@ -642,6 +668,7 @@ public class OverlayService extends Service {
         isExpired   = false;
         toast5Shown = false;
         toast1Shown = false;
+        pausedAt    = 0; // Reset pausedAt saat hideAll
 
         // Widget, toast, expired XML — null-safe
         if (widgetView  != null) widgetView.setVisibility(View.GONE);
@@ -1095,7 +1122,7 @@ public class OverlayService extends Service {
                     wv.getSettings().setJavaScriptEnabled(true);
                     wv.loadUrl("file:///android_asset/bayaroverlay.html?bayarStatus=" + currentBayarStatus);
                     bayarOverlayWv = wv;
-                    windowManager.addView(bayarOverlayWv, params);
+                    try { windowManager.addView(bayarOverlayWv, params); } catch (Exception ignored) {}
                 } catch (Exception e) {
                     android.util.Log.e("Astrophile", "showBayarOverlay error: " + e.getMessage());
                 }
@@ -1206,7 +1233,7 @@ public class OverlayService extends Service {
                         + "&paused=" + (isPaused ? "1" : "0");
                     wv.loadUrl(url);
                     timeOverlayWv = wv;
-                    windowManager.addView(timeOverlayWv, params);
+                    try { windowManager.addView(timeOverlayWv, params); } catch (Exception ignored) {}
 
                     // Hapus setelah 5.5 detik (0.5 detik extra untuk animasi fadeout)
                     mainHandler.postDelayed(new Runnable() {
@@ -1246,7 +1273,7 @@ public class OverlayService extends Service {
                 android.graphics.PixelFormat.OPAQUE
             );
             sleepView = black;
-            windowManager.addView(sleepView, lp);
+            try { windowManager.addView(sleepView, lp); } catch (Exception ignored) {}
         } catch (Exception e) {}
     }
 
