@@ -330,16 +330,9 @@ public class OverlayService extends Service {
 
         mainHandler.post(() -> {
             if (!isAct) {
+                // Operator klik Stop + Simpan Transaksi — reset semua overlay untuk sesi baru
                 isActive = false;
-                if (isExpired) {
-                    // Waktu habis + operator Stop manual saat countdown sleep jalan
-                    // Tampilkan layar hitam dulu agar tidak "nyala" setelah overlay hilang
-                    showSleep();
-                    mainHandler.postDelayed(() -> hideAll(), 300);
-                } else {
-                    // Stop normal sebelum expired — langsung bersihkan semua overlay
-                    hideAll();
-                }
+                hideAll();
             } else if ("reserved".equals(mode)) {
                 // Mode reserved = booking dijadwalkan — sembunyikan semua overlay, tampilkan idle
                 hideAll();
@@ -442,17 +435,16 @@ public class OverlayService extends Service {
         if (tvTime != null) tvTime.setText(timeStr);
 
         if (secs <= 0) {
-            // Waktu habis → tampil fullscreen expired + langsung countdown sleep
+            // Waktu habis → tampil fullscreen expired overlay saja
+            // Sleep/reset terjadi saat operator klik Stop + Simpan Transaksi
             widgetView.setVisibility(View.GONE);
             if (!isExpired) {
-                // Write balik ke Firebase agar kasir langsung tahu — sinkron 2 arah
+                // Write balik ke Firebase agar kasir langsung tahu
                 if (sessionRef != null) {
                     sessionRef.child("expired").setValue(true);
                     sessionRef.child("active").setValue(true);
                 }
                 showExpired();
-                // startSleepCountdown dipanggil dari onPageFinished WebView
-                // agar dipastikan HTML sudah load sebelum countdown dimulai
             }
             return;
         } else if (secs <= 60) {
@@ -506,68 +498,15 @@ public class OverlayService extends Service {
     public class ExpiredBridge {
         @android.webkit.JavascriptInterface
         public void onSleepCountdownFinished() {
-            mainHandler.post(() -> {
-                // ── Full reset untuk next pelanggan ────────────────────
-                isExpired   = false;
-                isActive    = false;
-                toast5Shown = false;
-                toast1Shown = false;
-                startTime   = 0;
-                duration    = 0;
-                pausedAt    = 0;
-                mode        = "";
-                namaPelanggan = "";
-
-                // Tampilkan layar hitam dulu (sleep view) — transisi mulus
-                showSleep();
-
-                // Destroy expiredWebView setelah layar hitam sudah di atas
-                mainHandler.postDelayed(() -> {
-                    try {
-                        if (expiredWebView != null) {
-                            windowManager.removeView(expiredWebView);
-                            expiredWebView.destroy();
-                            expiredWebView = null;
-                        }
-                    } catch (Exception ignored) {}
-                }, 200);
-
-                // Sembunyikan semua overlay lainnya
-                if (widgetView  != null) widgetView.setVisibility(android.view.View.GONE);
-                if (toastView   != null) toastView.setVisibility(android.view.View.GONE);
-                if (expiredView != null) expiredView.setVisibility(android.view.View.GONE);
-
-                // Bersihkan Firebase
-                try {
-                    if (sessionRef != null) sessionRef.setValue(null);
-                } catch (Exception ignored) {}
-
-                stopAlarm();
-            });
+            // Tidak dipakai di alur baru — reset terjadi saat operator Simpan Transaksi
+            // Dipanggil sebagai safety fallback dari JS bridge
+            mainHandler.post(() -> hideAll());
         }
     }
 
     // Dipanggil setelah kasir simpan transaksi — trigger sleep countdown di expired WebView
     private void startSleepCountdown() {
-        if (expiredWebView == null) return; // onPageFinished akan panggil lagi saat WebView siap
-        final android.webkit.WebView wv = expiredWebView;
-        wv.post(() -> wv.evaluateJavascript(
-            "window._sleepStarted = false;" +
-            "if(typeof window.startSleepCountdown==='function') window.startSleepCountdown();",
-            result -> {
-                // Kalau function belum ada (race condition), coba sekali lagi 500ms kemudian
-                if ("null".equals(result) || result == null) {
-                    mainHandler.postDelayed(() -> {
-                        if (expiredWebView != null) {
-                            expiredWebView.evaluateJavascript(
-                                "window._sleepStarted=false;" +
-                                "if(typeof window.startSleepCountdown==='function') window.startSleepCountdown();",
-                                null);
-                        }
-                    }, 500);
-                }
-            }
-        ));
+        // Tidak dipakai di alur baru — stub untuk kompatibilitas
     }
 
     private void showExpired() {
@@ -587,8 +526,6 @@ public class OverlayService extends Service {
             expiredWebView.evaluateJavascript("window._sleepStarted = false;", null);
             expiredWebView.setVisibility(android.view.View.VISIBLE);
             injectExpiredData(expiredWebView);
-            // WebView sudah ada dan loaded — langsung start countdown
-            mainHandler.postDelayed(() -> startSleepCountdown(), 200);
             return;
         }
 
@@ -609,9 +546,7 @@ public class OverlayService extends Service {
                 @Override
                 public void onPageFinished(android.webkit.WebView view, String url) {
                     injectExpiredData(view);
-                    // Halaman sudah load — langsung start countdown sleep
-                    // Delay 300ms biar injectExpiredData selesai render dulu
-                    mainHandler.postDelayed(() -> startSleepCountdown(), 300);
+                    // Tidak auto-start sleep — tunggu operator Stop + Simpan Transaksi
                 }
             });
             wv.addJavascriptInterface(new ExpiredBridge(), "Android");
