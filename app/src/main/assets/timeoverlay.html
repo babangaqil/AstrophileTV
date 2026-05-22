@@ -84,6 +84,8 @@ function applyColor(sisa){
 
 function getSisa(){
   var nowMs=Date.now();
+  // Saat di-pause, waktu tidak bertambah — tampilkan sisa saat pause
+  if(isPaused) return Math.max(0, sisaSecInit);
   if(mode==='countdown'){
     return Math.max(0,totalSec-((nowMs-fbStartTime)/1000));
   }else{
@@ -97,12 +99,15 @@ var totalSec=parseInt(getParam('totalSec')||'0');
 var sisaSecInit=parseInt(getParam('sisaSec')||'0');
 var fbStartTime=parseInt(getParam('fbStartTime')||'0');
 var loadMs=parseInt(getParam('loadMs')||''+Date.now());
+var isPaused=getParam('paused')==='1';
 
 if(!fbStartTime||fbStartTime<=0){
   fbStartTime=loadMs-(totalSec-sisaSecInit)*1000;
 }
 
-document.getElementById('modeLabel').textContent=mode==='countdown'?'SISA WAKTU':'DURASI MAIN';
+document.getElementById('modeLabel').textContent=isPaused
+  ? '⏸ DIJEDA'
+  : (mode==='countdown'?'SISA WAKTU':'DURASI MAIN');
 document.getElementById('subLabel').textContent='TV '+tvNum;
 
 // Tunggu font load dulu baru tampilkan angka
