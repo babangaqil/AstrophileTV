@@ -159,9 +159,10 @@ public class SetupActivity extends AppCompatActivity {
 
         btnConnect.setOnClickListener(v -> connectAndStart());
 
-        if (!prefs.getString("apiKey", "").isEmpty() && hasOverlayPermission()) {
-            startOverlayService();
-            showStatus("Terhubung! | " + deviceId, "#00ff88");
+        // Tidak auto-connect — operator harus klik Hubungkan manual
+        if (!prefs.getString("apiKey", "").isEmpty() && !hasOverlayPermission()) {
+            // Kalau belum ada izin overlay, tampilkan warning
+            showStatus("Butuh izin overlay — klik Hubungkan", "#ffcc00");
         }
 
         // Monitor koneksi live — polling tvStatus/online setiap 5 detik
@@ -371,18 +372,6 @@ public class SetupActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        // Cek setiap kali app kembali ke foreground (termasuk setelah izin overlay diberikan)
-        // Kalau sudah ada API key + permission → langsung connect tanpa perlu klik
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        if (!prefs.getString("apiKey", "").isEmpty() && hasOverlayPermission()) {
-            // Service belum jalan → auto-start
-            startOverlayService();
-        }
-    }
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
         if (monitorHandler != null && monitorRunnable != null)
@@ -468,7 +457,7 @@ public class SetupActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_OVERLAY) {
-            if (hasOverlayPermission()) { startOverlayService(); showStatus("Izin diberikan!", "#00ff88"); }
+            if (hasOverlayPermission()) { showStatus("Izin OK — klik Hubungkan untuk mulai", "#00ff88"); }
             else showStatus("Izin ditolak.", "#ff4d6d");
         }
     }
