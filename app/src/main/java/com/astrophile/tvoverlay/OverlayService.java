@@ -365,6 +365,14 @@ public class OverlayService extends Service {
                     }
                 } catch (Exception ignored) {}
                 isShowingTimeOverlay = false;
+                // Clear stale tvControl command dari sesi sebelumnya
+                // Mencegah cmd lama (showtime dari countdown) terpanggil di sesi baru (billing)
+                try {
+                    if (firebaseDb != null) {
+                        firebaseDb.getReference("settings/tvControl/" + tvNum + "/cmd")
+                            .setValue("none");
+                    }
+                } catch (Exception ignored) {}
                 hideExpired();
                 if (startTime > 0) {
                     showWidget();
