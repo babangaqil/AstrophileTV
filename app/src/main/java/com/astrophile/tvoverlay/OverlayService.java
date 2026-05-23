@@ -1066,7 +1066,8 @@ public class OverlayService extends Service {
 
         // Listen perubahan bayarStatus dari Firebase secara realtime
         if (firebaseDb != null) {
-            if (bayarOverlayWv != null) { try { windowManager.removeView(bayarOverlayWv); } catch (Exception ignored) {} }
+            // Jangan removeView di sini — bayarOverlayWv baru saja dibuat di mainHandler.post
+            // removeView di sini menyebabkan overlay hilang sebelum tampil (race condition)
             if (bayarStatusRef != null && bayarStatusListener != null) {
                 bayarStatusRef.removeEventListener(bayarStatusListener);
             }
@@ -1115,16 +1116,25 @@ public class OverlayService extends Service {
 
     private void showTimeOverlay() {
         if (!isActive) return;
-        // Hitung sisa waktu — perhatikan kondisi pause
-        long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
-        long elapsed = (effectiveNow - startTime) / 1000;
-        long sisa = Math.max(0, duration - elapsed);
-        final String timeStr = formatTime(sisa);
         final String modeVal = (mode != null) ? mode : "countdown";
         final int tvNumVal = tvNum;
-        final long totalSec = duration;
-        final long sisaSec = sisa;
         final boolean isPaused = pausedAt > 0;
+        final long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+
+        // Hitung nilai yang dikirim ke timeoverlay.html
+        final long totalSec;
+        final long sisaSec;
+        if ("billing".equals(modeVal)) {
+            // Billing: tidak ada durasi tetap — kirim elapsed sebagai sisaSec
+            // timeoverlay.html akan hitung (nowMs - fbStartTime)/1000 untuk durasi berjalan
+            totalSec = 0;
+            sisaSec  = (effectiveNow - startTime) / 1000; // elapsed untuk billing
+        } else {
+            // Countdown: hitung sisa waktu
+            long elapsed = (effectiveNow - startTime) / 1000;
+            totalSec = duration;
+            sisaSec  = Math.max(0, duration - elapsed);
+        }
 
         mainHandler.post(new Runnable() {
             @Override public void run() {
