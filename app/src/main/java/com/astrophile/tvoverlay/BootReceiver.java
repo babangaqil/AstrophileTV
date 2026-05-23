@@ -12,57 +12,47 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         SharedPreferences prefs = context.getSharedPreferences(
-                "astro_tv_prefs", Context.MODE_PRIVATE
-            );
+                "astro_tv_prefs", Context.MODE_PRIVATE);
         String apiKey = prefs.getString("apiKey", "");
         if (apiKey.isEmpty()) return;
 
         if (Intent.ACTION_BOOT_COMPLETED.equals(action)) {
-            // Auto start setelah boot
             startService(context);
         } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
-            // APK di-update — stop service lama dulu, tunggu, lalu start versi baru
-            // Ini memastikan service baru yang jalan, bukan service lama yang masih di memori
             try {
-                context.stopService(new android.content.Intent(context,
-                    com.astrophile.tvoverlay.OverlayService.class));
+                context.stopService(new Intent(context, OverlayService.class));
             } catch (Exception ignored) {}
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
-                startService(context), 1500);
+            new android.os.Handler(android.os.Looper.getMainLooper())
+                .postDelayed(() -> startService(context), 1500);
         } else if ("android.net.conn.CONNECTIVITY_CHANGE".equals(action)) {
-            // Jaringan balik online — restart service jika belum jalan
-            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
-                context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            android.net.ConnectivityManager cm =
+                (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             boolean connected = false;
             if (cm != null) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    // API 29+ (Android 10+): pakai NetworkCapabilities
                     android.net.Network net = cm.getActiveNetwork();
-                    android.net.NetworkCapabilities cap = net != null
-                        ? cm.getNetworkCapabilities(net) : null;
+                    android.net.NetworkCapabilities cap =
+                        net != null ? cm.getNetworkCapabilities(net) : null;
                     connected = cap != null && (
                         cap.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
                         cap.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
                         cap.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET));
                 } else {
-                    // API 21-28 (Android 5-9): getActiveNetworkInfo masih OK
                     @SuppressWarnings("deprecation")
                     android.net.NetworkInfo ni = cm.getActiveNetworkInfo();
                     connected = ni != null && ni.isConnected();
                 }
             }
-            if (connected) {
-                startService(context);
-            }
+            if (connected) startService(context);
         }
     }
 
     private void startService(Context context) {
-        Intent serviceIntent = new Intent(context, OverlayService.class);
+        Intent si = new Intent(context, OverlayService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent);
+            context.startForegroundService(si);
         } else {
-            context.startService(serviceIntent);
+            context.startService(si);
         }
     }
 }
