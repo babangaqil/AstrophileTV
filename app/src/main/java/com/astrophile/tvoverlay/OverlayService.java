@@ -1172,12 +1172,16 @@ public class OverlayService extends Service {
 
                     // Inject data via URL parameter
                     // Kirim startTime Firebase (ms) agar timer sync dengan sesi asli
+                    // Pastikan nilai valid sebelum masuk URL
+                    long safeTotalSec = Math.max(0, totalSec);
+                    long safeSisaSec  = Math.max(0, sisaSec);
+                    long safeStart    = startTime > 0 ? startTime : System.currentTimeMillis();
                     String url = "file:///android_asset/timeoverlay.html"
                         + "?mode=" + android.net.Uri.encode(modeVal)
                         + "&tvNum=" + tvNumVal
-                        + "&totalSec=" + totalSec
-                        + "&sisaSec=" + sisaSec
-                        + "&fbStartTime=" + startTime
+                        + "&totalSec=" + safeTotalSec
+                        + "&sisaSec=" + safeSisaSec
+                        + "&fbStartTime=" + safeStart
                         + "&loadMs=" + System.currentTimeMillis()
                         + "&paused=" + (isPaused ? "1" : "0");
                     wv.loadUrl(url);
@@ -1199,6 +1203,7 @@ public class OverlayService extends Service {
 
                 } catch (Exception e) {
                     android.util.Log.e("Astrophile", "showTimeOverlay error: " + e.getMessage());
+                    isShowingTimeOverlay = false; // reset flag agar bisa dicoba lagi
                 }
             }
         });
