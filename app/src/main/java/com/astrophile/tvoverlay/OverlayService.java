@@ -350,13 +350,21 @@ public class OverlayService extends Service {
                     }
                 } catch (Exception ignored) {}
                 // Hapus sleepView (layar hitam) jika masih ada dari sesi sebelumnya
-                // Ini yang bikin layar tetap hitam saat sesi baru mulai setelah sleep
                 try {
                     if (sleepView != null) {
                         windowManager.removeView(sleepView);
                         sleepView = null;
                     }
                 } catch (Exception ignored) {}
+                // Hapus timeOverlay dari sesi sebelumnya agar tidak double saat klik TIME lagi
+                try {
+                    if (timeOverlayWv != null) {
+                        windowManager.removeView(timeOverlayWv);
+                        timeOverlayWv.destroy();
+                        timeOverlayWv = null;
+                    }
+                } catch (Exception ignored) {}
+                isShowingTimeOverlay = false;
                 hideExpired();
                 if (startTime > 0) {
                     showWidget();
@@ -645,6 +653,7 @@ public class OverlayService extends Service {
         try {
             if (timeOverlayWv != null) {
                 windowManager.removeView(timeOverlayWv);
+                timeOverlayWv.destroy();
                 timeOverlayWv = null;
             }
         } catch (Exception ignored) {}
@@ -1143,11 +1152,14 @@ public class OverlayService extends Service {
         mainHandler.post(new Runnable() {
             @Override public void run() {
                 try {
-                    // Hapus overlay sebelumnya jika masih ada
+                    // Hapus SEMUA instance timeOverlay yang masih ada
                     if (timeOverlayWv != null) {
                         try { windowManager.removeView(timeOverlayWv); } catch (Exception ignored) {}
+                        try { timeOverlayWv.destroy(); } catch (Exception ignored) {}
                         timeOverlayWv = null;
                     }
+                    // Delay singkat untuk pastikan remove selesai sebelum addView baru
+                    try { Thread.sleep(50); } catch (Exception ignored) {}
 
                     int overlayType = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O
                         ? android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1194,6 +1206,7 @@ public class OverlayService extends Service {
                             try {
                                 if (timeOverlayWv != null) {
                                     windowManager.removeView(timeOverlayWv);
+                                    timeOverlayWv.destroy();
                                     timeOverlayWv = null;
                                 }
                             } catch (Exception ignored) {}
