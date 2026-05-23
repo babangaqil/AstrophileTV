@@ -648,6 +648,7 @@ public class OverlayService extends Service {
                 timeOverlayWv = null;
             }
         } catch (Exception ignored) {}
+        isShowingTimeOverlay = false; // reset guard
 
         stopAlarm();
     }
@@ -1113,9 +1114,12 @@ public class OverlayService extends Service {
 
     // ── SHOW TIME OVERLAY (5 detik) ──────────────────────────────
     private android.webkit.WebView timeOverlayWv = null;
+    private boolean isShowingTimeOverlay = false;
 
     private void showTimeOverlay() {
         if (!isActive) return;
+        if (isShowingTimeOverlay) return; // guard double-call
+        isShowingTimeOverlay = true;
         final String modeVal = (mode != null) ? mode : "countdown";
         final int tvNumVal = tvNum;
         final boolean isPaused = pausedAt > 0;
@@ -1189,6 +1193,7 @@ public class OverlayService extends Service {
                                     timeOverlayWv = null;
                                 }
                             } catch (Exception ignored) {}
+                            isShowingTimeOverlay = false; // reset guard
                         }
                     }, 5500);
 
