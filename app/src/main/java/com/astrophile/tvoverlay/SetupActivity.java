@@ -371,6 +371,18 @@ public class SetupActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // Cek setiap kali app kembali ke foreground (termasuk setelah izin overlay diberikan)
+        // Kalau sudah ada API key + permission → langsung connect tanpa perlu klik
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        if (!prefs.getString("apiKey", "").isEmpty() && hasOverlayPermission()) {
+            // Service belum jalan → auto-start
+            startOverlayService();
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         if (monitorHandler != null && monitorRunnable != null)
