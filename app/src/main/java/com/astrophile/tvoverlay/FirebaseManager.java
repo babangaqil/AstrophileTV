@@ -211,7 +211,12 @@ public class FirebaseManager {
     }
 
     // ── TV control command listener ───────────────────────────
-    public void listenTvControl(int tvNum, CommandCallback cb) {
+    // Callback bawa full snap agar showbayar bisa baca bayarStatusOverlay (seperti v1.9)
+    public interface SnapCommandCallback {
+        void onCommand(String cmd, DataSnapshot snap);
+    }
+
+    public void listenTvControl(int tvNum, SnapCommandCallback cb) {
         if (db == null) return;
 
         removeTvControlListener();
@@ -219,9 +224,10 @@ public class FirebaseManager {
         tvControlRef = db.getReference("settings/tvControl/" + tvNum);
         tvControlListener = new ValueEventListener() {
             @Override public void onDataChange(DataSnapshot snap) {
+                if (!snap.exists()) return;
                 String cmd = snap.child("cmd").getValue(String.class);
                 // Filter "none" dan kosong — jangan trigger command saat reset
-                if (cmd != null && !cmd.isEmpty() && !cmd.equals("none")) cb.onCommand(cmd);
+                if (cmd != null && !cmd.isEmpty() && !cmd.equals("none")) cb.onCommand(cmd, snap);
             }
             @Override public void onCancelled(DatabaseError e) {
                 Log.e(TAG, "tvControlListener cancelled: " + e.getMessage());
