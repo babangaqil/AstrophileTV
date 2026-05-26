@@ -108,7 +108,8 @@ public class FirebaseManager {
                     "_tv_overlay");
             }
             db = FirebaseDatabase.getInstance(app);
-            db.setPersistenceEnabled(false); // Disable persistence — cegah stale cache 24 jam
+            db.setPersistenceEnabled(true); // Enable persistence — buffer saat koneksi putus sesaat
+            try { db.goOnline(); } catch (Exception e) { Log.w(TAG, "goOnline: " + e.getMessage()); }
             Log.d(TAG, "init() OK — db=" + dbUrl);
             return true;
         } catch (Exception e) {
@@ -138,6 +139,7 @@ public class FirebaseManager {
             }
         };
         sessionRef.addValueEventListener(sessionListener);
+        sessionRef.keepSynced(true); // Force fetch dari server, bypass cache lama
         Log.d(TAG, "listenSession attached tv=" + tvNum);
     }
 
@@ -240,7 +242,8 @@ public class FirebaseManager {
 
         removeBayarStatusListener();
 
-        bayarStatusRef = db.getReference("settings/activeSessions/" + tvNum + "/bayarStatus");
+        // Listen bayarStatusOverlay (status AGREGAT: main+items+tambahan) agar sync dengan badge kasir
+        bayarStatusRef = db.getReference("settings/activeSessions/" + tvNum + "/bayarStatusOverlay");
         bayarStatusListener = new ValueEventListener() {
             @Override public void onDataChange(DataSnapshot snap) {
                 String status = snap.getValue(String.class);
