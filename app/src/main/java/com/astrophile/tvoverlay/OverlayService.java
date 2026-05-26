@@ -544,7 +544,7 @@ public class OverlayService extends Service {
     // =========================================================
 
     private void showTimeOverlay() {
-        if (!sessionManager.isActive() || isShowingTimeOverlay) return;
+        if (isShowingTimeOverlay) return;
         isShowingTimeOverlay = true;
 
         String  mode      = sessionManager.getMode();
