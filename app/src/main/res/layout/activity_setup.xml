@@ -185,6 +185,18 @@
             android:layout_marginTop="4dp"
             android:visibility="gone"/>
 
+        <Button
+            android:id="@+id/btnForceStop"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="⏹  PAKSA BERHENTI APLIKASI"
+            android:textColor="#ff4d6d"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1"
+            android:backgroundTint="#1a0a10"
+            android:layout_marginTop="12dp"/>
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
