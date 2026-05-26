@@ -1,274 +1,137 @@
 package com.astrophile.tvoverlay;
 
-import android.annotation.SuppressLint;
-import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
-import android.view.WindowManager;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 
 /**
- * WebViewManager — Zero WebView accumulation guarantee.
+ * SessionManager — Single source of truth untuk semua state sesi.
  *
  * GUARANTEE:
- * - destroyWebView() SELALU dipanggil sebelum membuat WebView baru
- * - Full hardening sequence: stop → blank → clearHistory → clearCache
- *   → removeAllViews → onPause → destroy
- * - Semua WebView disimpan ke named fields — tidak ada anonymous reference
- * - addView / removeView simetris — cegah WindowLeaked & BadTokenException
+ * - Zero ghost session: resetSession() wajib dipanggil sebelum sesi baru
+ * - Semua field explicit null/false/0 saat reset — tidak ada state tertinggal
+ * - Thread-safe via synchronized getter/setter
  */
-public class WebViewManager {
+public class SessionManager {
 
-    private static final String TAG = "AstroWebView";
+    private static final String TAG = "AstroSession";
 
-    private final Context       ctx;
-    private final WindowManager wm;
-    private final Handler       mainHandler;
+    // ── Session State ─────────────────────────────────────────
+    private volatile boolean active      = false;
+    private volatile boolean expired     = false;
+    private volatile String  mode        = "";       // "billing" | "countdown" | ""
+    private volatile long    startTime   = 0L;
+    private volatile long    duration    = 0L;       // detik
+    private volatile long    pausedAt    = 0L;       // 0 = tidak paused
+    private volatile String  namaPelanggan = "";
+    private volatile String  tvName      = "TV 1";
+    private volatile int     tvNum       = 1;
+    private volatile String  namaToko    = "ASTROPHILE";
 
-    // ── Named WebView fields — WAJIB disimpan ────────────────
-    private WebView timeOverlayWv  = null;
-    private WebView expiredWv      = null;
-    private WebView bayarWv        = null;
+    // ── Notify flags — reset tiap sesi ───────────────────────
+    private volatile boolean toast5Shown = false;
+    private volatile boolean toast1Shown = false;
 
-    // Track apakah masing-masing sedang attached ke WindowManager
-    private boolean timeOverlayAttached = false;
-    private boolean expiredAttached     = false;
-    private boolean bayarAttached       = false;
-
-    public WebViewManager(Context ctx, WindowManager wm) {
-        this.ctx         = ctx;
-        this.wm          = wm;
-        this.mainHandler = new Handler(Looper.getMainLooper());
+    // ── Listener ─────────────────────────────────────────────
+    public interface SessionListener {
+        void onSessionStarted();
+        void onSessionExpired();
+        void onSessionReset();
     }
 
-    // ─────────────────────────────────────────────────────────
-    // TIME OVERLAY WebView
-    // ─────────────────────────────────────────────────────────
+    private SessionListener listener;
 
-    public WebView getOrCreateTimeOverlay(String htmlPath, Runnable onReady) {
-        // Destroy existing first — zero accumulation
-        destroyTimeOverlay();
+    public void setListener(SessionListener l) { this.listener = l; }
 
-        timeOverlayWv = buildHardenedWebView();
-        timeOverlayWv.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView view, String url) {
-                if (onReady != null) mainHandler.post(onReady);
+    // ── Full reset — WAJIB dipanggil sebelum sesi baru ───────
+    public synchronized void resetSession() {
+        Log.d(TAG, "resetSession() — clearing all session state");
+        active        = false;
+        expired       = false;
+        mode          = "";
+        startTime     = 0L;
+        duration      = 0L;
+        pausedAt      = 0L;
+        namaPelanggan = "";
+        toast5Shown   = false;
+        toast1Shown   = false;
+        if (listener != null) listener.onSessionReset();
+    }
+
+    // ── Populate dari Firebase snapshot ──────────────────────
+    public synchronized void applyFromFirebase(
+            boolean fbActive, boolean fbExpired, String fbMode,
+            long fbStart, long fbDuration, String fbNama, long fbPausedAt) {
+
+        this.active        = fbActive;
+        this.expired       = fbExpired;
+        this.mode          = fbMode   != null ? fbMode   : "";
+        this.startTime     = fbStart;
+        this.duration      = fbDuration;
+        this.namaPelanggan = fbNama   != null ? fbNama   : "";
+        this.pausedAt      = fbPausedAt;
+
+        Log.d(TAG, "applyFromFirebase active=" + active + " mode=" + mode
+                + " start=" + startTime + " dur=" + duration);
+
+        if (active && startTime > 0 && listener != null) {
+            if (fbExpired) {
+                // Firebase sudah expired — langsung trigger overlay tanpa tunggu countdown
+                listener.onSessionExpired();
+            } else {
+                listener.onSessionStarted();
             }
-        });
-        timeOverlayWv.loadUrl(htmlPath);
-        Log.d(TAG, "createTimeOverlay OK");
-        return timeOverlayWv;
-    }
-
-    public void attachTimeOverlay(WindowManager.LayoutParams params) {
-        if (timeOverlayWv == null) { Log.e(TAG, "attachTimeOverlay — wv null"); return; }
-        if (timeOverlayAttached) {
-            Log.w(TAG, "attachTimeOverlay — already attached, skip");
-            return;
-        }
-        try {
-            wm.addView(timeOverlayWv, params);
-            timeOverlayAttached = true;
-            Log.d(TAG, "attachTimeOverlay OK");
-        } catch (Exception e) {
-            Log.e(TAG, "attachTimeOverlay failed: " + e.getMessage(), e);
         }
     }
 
-    public void detachTimeOverlay() {
-        if (timeOverlayWv != null && timeOverlayAttached) {
-            try { wm.removeView(timeOverlayWv); }
-            catch (Exception e) { Log.e(TAG, "detachTimeOverlay: " + e.getMessage()); }
-            timeOverlayAttached = false;
-            Log.d(TAG, "detachTimeOverlay OK");
+    // ── Trigger expired ───────────────────────────────────────
+    public synchronized void markExpired() {
+        if (!expired) {
+            expired = true;
+            Log.d(TAG, "markExpired()");
+            if (listener != null) listener.onSessionExpired();
         }
     }
 
-    public void destroyTimeOverlay() {
-        detachTimeOverlay();
-        fullyDestroyWebView(timeOverlayWv, "timeOverlay");
-        timeOverlayWv = null;
+    // ── Getters ───────────────────────────────────────────────
+    public boolean isActive()         { return active; }
+    public boolean isExpired()        { return expired; }
+    public String  getMode()          { return mode; }
+    public long    getStartTime()     { return startTime; }
+    public long    getDuration()      { return duration; }
+    public long    getPausedAt()      { return pausedAt; }
+    public String  getNamaPelanggan() { return namaPelanggan; }
+    public String  getTvName()        { return tvName; }
+    public int     getTvNum()         { return tvNum; }
+    public String  getNamaToko()      { return namaToko; }
+    public boolean isToast5Shown()    { return toast5Shown; }
+    public boolean isToast1Shown()    { return toast1Shown; }
+
+    // ── Setters ───────────────────────────────────────────────
+    public void setTvNum(int n)             { tvNum = n; }
+    public void setTvName(String n)         { tvName = n != null ? n : "TV " + tvNum; }
+    public void setNamaToko(String n)       { namaToko = n != null && !n.isEmpty() ? n : "ASTROPHILE"; }
+    public void setPausedAt(long t)         { pausedAt = t; }
+    public void setToast5Shown(boolean v)   { toast5Shown = v; }
+    public void setToast1Shown(boolean v)   { toast1Shown = v; }
+
+    // ── Computed helpers ──────────────────────────────────────
+
+    /** Sisa detik countdown. 0 jika bukan countdown atau sudah habis. */
+    public long getRemainingSeconds() {
+        if (!"countdown".equals(mode) || startTime == 0) return 0L;
+        long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+        long elapsed = (effectiveNow - startTime) / 1000;
+        return Math.max(0L, duration - elapsed);
     }
 
-    public WebView getTimeOverlay() { return timeOverlayWv; }
-    public boolean isTimeOverlayAttached() { return timeOverlayAttached; }
-
-    // ─────────────────────────────────────────────────────────
-    // EXPIRED WebView
-    // ─────────────────────────────────────────────────────────
-
-    public WebView getOrCreateExpiredOverlay(String htmlPath, Runnable onReady) {
-        if (expiredWv != null && expiredAttached) {
-            // Reuse existing — reset state saja, tidak perlu recreate
-            Log.d(TAG, "reuseExpiredOverlay — reset JS state");
-            expiredWv.evaluateJavascript("if(window._sleepStarted !== undefined) window._sleepStarted = false;", null);
-            return expiredWv;
-        }
-
-        destroyExpiredOverlay();
-
-        expiredWv = buildHardenedWebView();
-        expiredWv.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView view, String url) {
-                if (onReady != null) mainHandler.post(onReady);
-            }
-        });
-        expiredWv.loadUrl(htmlPath);
-        Log.d(TAG, "createExpiredOverlay OK");
-        return expiredWv;
+    /** Elapsed detik billing. */
+    public long getElapsedSeconds() {
+        if (startTime == 0) return 0L;
+        long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+        return (effectiveNow - startTime) / 1000;
     }
 
-    public void attachExpiredOverlay(WindowManager.LayoutParams params) {
-        if (expiredWv == null) { Log.e(TAG, "attachExpiredOverlay — wv null"); return; }
-        if (expiredAttached) { Log.w(TAG, "attachExpiredOverlay — already attached"); return; }
-        try {
-            wm.addView(expiredWv, params);
-            expiredAttached = true;
-            Log.d(TAG, "attachExpiredOverlay OK");
-        } catch (Exception e) {
-            Log.e(TAG, "attachExpiredOverlay failed: " + e.getMessage(), e);
-        }
-    }
+    public boolean isPaused() { return pausedAt > 0; }
 
-    public void detachExpiredOverlay() {
-        if (expiredWv != null && expiredAttached) {
-            try { wm.removeView(expiredWv); }
-            catch (Exception e) { Log.e(TAG, "detachExpiredOverlay: " + e.getMessage()); }
-            expiredAttached = false;
-        }
-    }
-
-    public void destroyExpiredOverlay() {
-        detachExpiredOverlay();
-        fullyDestroyWebView(expiredWv, "expiredOverlay");
-        expiredWv = null;
-    }
-
-    public WebView getExpiredOverlay() { return expiredWv; }
-    public boolean isExpiredAttached() { return expiredAttached; }
-
-    // ─────────────────────────────────────────────────────────
-    // BAYAR WebView
-    // ─────────────────────────────────────────────────────────
-
-    public WebView getOrCreateBayarOverlay(String htmlPath, Runnable onReady) {
-        destroyBayarOverlay();
-
-        bayarWv = buildHardenedWebView();
-        bayarWv.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView view, String url) {
-                if (onReady != null) mainHandler.post(onReady);
-            }
-        });
-        bayarWv.loadUrl(htmlPath);
-        Log.d(TAG, "createBayarOverlay OK");
-        return bayarWv;
-    }
-
-    public void attachBayarOverlay(WindowManager.LayoutParams params) {
-        if (bayarWv == null) { Log.e(TAG, "attachBayarOverlay — wv null"); return; }
-        if (bayarAttached) { Log.w(TAG, "attachBayarOverlay — already attached"); return; }
-        try {
-            wm.addView(bayarWv, params);
-            bayarAttached = true;
-            Log.d(TAG, "attachBayarOverlay OK");
-        } catch (Exception e) {
-            Log.e(TAG, "attachBayarOverlay failed: " + e.getMessage(), e);
-        }
-    }
-
-    public void detachBayarOverlay() {
-        if (bayarWv != null && bayarAttached) {
-            try { wm.removeView(bayarWv); }
-            catch (Exception e) { Log.e(TAG, "detachBayarOverlay: " + e.getMessage()); }
-            bayarAttached = false;
-        }
-    }
-
-    public void destroyBayarOverlay() {
-        detachBayarOverlay();
-        fullyDestroyWebView(bayarWv, "bayarOverlay");
-        bayarWv = null;
-    }
-
-    public WebView getBayarOverlay() { return bayarWv; }
-
-    // ─────────────────────────────────────────────────────────
-    // Destroy ALL — wajib dipanggil saat session reset & onDestroy
-    // ─────────────────────────────────────────────────────────
-
-    public void destroyAll() {
-        Log.d(TAG, "destroyAll() — destroying all WebViews");
-        destroyTimeOverlay();
-        destroyExpiredOverlay();
-        destroyBayarOverlay();
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // Core: full hardening destroy sequence (per prompt spesifikasi)
-    // ─────────────────────────────────────────────────────────
-
-    private void fullyDestroyWebView(WebView wv, String name) {
-        if (wv == null) return;
-        try {
-            wv.stopLoading();
-            wv.loadUrl("about:blank");
-            wv.clearHistory();
-            wv.clearCache(true);
-            wv.removeAllViews();
-            wv.onPause();
-            wv.destroy();
-            Log.d(TAG, "fullyDestroyWebView [" + name + "] OK");
-        } catch (Exception e) {
-            Log.e(TAG, "fullyDestroyWebView [" + name + "] error: " + e.getMessage(), e);
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // Build hardened WebView
-    // ─────────────────────────────────────────────────────────
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private WebView buildHardenedWebView() {
-        WebView wv = new WebView(ctx);
-        WebSettings s = wv.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setAllowFileAccess(true);
-        s.setAllowContentAccess(true);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        s.setCacheMode(WebSettings.LOAD_NO_CACHE); // No cache — cegah stale data 24 jam
-        s.setMediaPlaybackRequiresUserGesture(false);
-        // Hardware acceleration
-        wv.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
-        return wv;
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // JS injection helpers
-    // ─────────────────────────────────────────────────────────
-
-    public void evalOnTimeOverlay(String js) {
-        if (timeOverlayWv == null) return;
-        mainHandler.post(() -> timeOverlayWv.evaluateJavascript(js, null));
-    }
-
-    public void evalOnExpiredOverlay(String js) {
-        if (expiredWv == null) return;
-        mainHandler.post(() -> expiredWv.evaluateJavascript(js, null));
-    }
-
-    public void evalOnBayarOverlay(String js) {
-        if (bayarWv == null) return;
-        mainHandler.post(() -> bayarWv.evaluateJavascript(js, null));
-    }
-
-    public void setTimeOverlayVisible(boolean visible) {
-        if (timeOverlayWv == null) return;
-        mainHandler.post(() -> timeOverlayWv.setVisibility(
-            visible ? android.view.View.VISIBLE : android.view.View.GONE));
-    }
+    public boolean isCountdown() { return "countdown".equals(mode); }
+    public boolean isBilling()   { return "billing".equals(mode); }
 }
