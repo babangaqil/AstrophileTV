@@ -326,7 +326,7 @@ public class OverlayService extends Service {
     private void startTicker() {
         timerManager.startTicker(() -> {
             if (!sessionManager.isActive() || sessionManager.isExpired()) return;
-            mainHandler.post(this::updateWidget);
+            mainHandler.post(() -> { if (!sessionManager.isExpired()) updateWidget(); });
             if (sessionManager.getStartTime() == 0) {
                 Log.w(TAG, "active but startTime=0 — force re-fetch");
                 firebaseManager.listenSession(tvNum, new FirebaseManager.SessionDataCallback() {
@@ -418,13 +418,19 @@ public class OverlayService extends Service {
 
         audioManager.startAlarm();
 
+        // Attach dulu ke WindowManager sebelum load, supaya overlay muncul tepat waktu
         webViewManager.getOrCreateExpiredOverlay(
             "file:///android_asset/expired.html",
             () -> injectExpiredData(webViewManager.getExpiredOverlay())
         );
 
+        // Attach ke window — kalau sudah attached (reuse sesi lama) skip addView
         if (!webViewManager.isExpiredAttached()) {
             webViewManager.attachExpiredOverlay(makeFullscreenParams(PixelFormat.OPAQUE));
+        } else {
+            // Sudah attached dari sesi sebelumnya — pastikan visible
+            android.webkit.WebView ev = webViewManager.getExpiredOverlay();
+            if (ev != null) ev.setVisibility(android.view.View.VISIBLE);
         }
     }
 
