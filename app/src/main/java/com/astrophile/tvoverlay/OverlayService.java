@@ -252,6 +252,8 @@ public class OverlayService extends Service {
                 Log.d(TAG, "Firebase CONNECTED");
                 // Force fetch dari server agar data segar (seperti v1.9)
                 try { com.google.firebase.database.FirebaseDatabase.getInstance().goOnline(); } catch (Exception e) {}
+                // Clear cmd lama sebelum re-attach listener — cegah sleep/wake terpanggil ulang
+                firebaseManager.clearTvControlCmd(tvNum);
                 attachAllFirebaseListeners();
                 firebaseManager.setTvOnline(tvNum, true);
                 firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
@@ -456,7 +458,7 @@ public class OverlayService extends Service {
     // =========================================================
 
     private void handleTvCommand(String cmd) {
-        if (cmd == null || "none".equals(cmd)) return;
+        if (cmd == null || cmd.isEmpty() || "none".equals(cmd)) return;
         switch (cmd) {
             case "sleep":    showSleep();  break;
             case "wake":     hideSleep();  break;
