@@ -191,6 +191,9 @@ public class OverlayService extends Service {
                     webViewManager.destroyAll();
                     isShowingTimeOverlay = false;
                     firebaseManager.clearTvControlCmd(tvNum);
+                    // Tulis balik active:true ke Firebase agar kasir tahu TV aktif (seperti v1.9)
+                    firebaseManager.setActiveSession(tvNum, true);
+                    firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
                     if (sessionManager.getStartTime() > 0) updateWidget();
                 });
             }
@@ -238,7 +241,8 @@ public class OverlayService extends Service {
                 mainHandler.postDelayed(() -> {
                     try { com.google.firebase.database.FirebaseDatabase.getInstance().goOnline(); }
                     catch (Exception e) { Log.e(TAG, "goOnline: " + e.getMessage()); }
-                    firebaseManager.listenSession(tvNum, this);
+                    // Re-attach + keepSynced seperti v1.9 agar langsung fetch dari server
+                    mainHandler.postDelayed(() -> firebaseManager.listenSession(tvNum, this), 500);
                 }, 2000);
             }
         });
@@ -246,6 +250,8 @@ public class OverlayService extends Service {
         firebaseManager.listenConnection(new FirebaseManager.ConnectionCallback() {
             @Override public void onConnected() {
                 Log.d(TAG, "Firebase CONNECTED");
+                // Force fetch dari server agar data segar (seperti v1.9)
+                try { com.google.firebase.database.FirebaseDatabase.getInstance().goOnline(); } catch (Exception e) {}
                 attachAllFirebaseListeners();
                 firebaseManager.setTvOnline(tvNum, true);
                 firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
@@ -364,9 +370,11 @@ public class OverlayService extends Service {
             widgetView.setVisibility(View.GONE);
             sessionManager.markExpired();
             try {
-                com.google.firebase.database.FirebaseDatabase.getInstance()
-                    .getReference("settings/activeSessions/" + tvNum + "/expired")
-                    .setValue(true);
+                // Tulis expired:true + active:true agar kasir tahu sesi habis (v1.9 behaviour)
+                com.google.firebase.database.FirebaseDatabase db =
+                    com.google.firebase.database.FirebaseDatabase.getInstance();
+                db.getReference("settings/activeSessions/" + tvNum + "/expired").setValue(true);
+                db.getReference("settings/activeSessions/" + tvNum + "/active").setValue(true);
             } catch (Exception e) { Log.e(TAG, "setExpired: " + e.getMessage()); }
             return;
         }
