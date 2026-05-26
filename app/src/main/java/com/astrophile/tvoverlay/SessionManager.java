@@ -73,7 +73,12 @@ public class SessionManager {
                 + " start=" + startTime + " dur=" + duration);
 
         if (active && startTime > 0 && listener != null) {
-            listener.onSessionStarted();
+            if (fbExpired) {
+                // Firebase sudah expired — langsung trigger overlay tanpa tunggu countdown
+                listener.onSessionExpired();
+            } else {
+                listener.onSessionStarted();
+            }
         }
     }
 
