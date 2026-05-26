@@ -220,7 +220,8 @@ public class FirebaseManager {
         tvControlListener = new ValueEventListener() {
             @Override public void onDataChange(DataSnapshot snap) {
                 String cmd = snap.child("cmd").getValue(String.class);
-                if (cmd != null && !cmd.isEmpty()) cb.onCommand(cmd);
+                // Filter "none" dan kosong — jangan trigger command saat reset
+                if (cmd != null && !cmd.isEmpty() && !cmd.equals("none")) cb.onCommand(cmd);
             }
             @Override public void onCancelled(DatabaseError e) {
                 Log.e(TAG, "tvControlListener cancelled: " + e.getMessage());
