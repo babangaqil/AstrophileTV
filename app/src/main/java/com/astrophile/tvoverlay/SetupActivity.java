@@ -170,6 +170,17 @@ public class SetupActivity extends AppCompatActivity {
 
         // Bind update button
         btnUpdate    = findViewById(R.id.btnUpdate);
+        // Bind force stop button
+        btnForceStop = findViewById(R.id.btnForceStop);
+        if (btnForceStop != null) {
+            btnForceStop.setOnClickListener(v -> {
+                // Stop overlay service
+                stopService(new android.content.Intent(this, OverlayService.class));
+                // Keluar dari aplikasi sepenuhnya
+                finishAffinity();
+                android.os.Process.killProcess(android.os.Process.myPid());
+            });
+        }
         tvUpdateInfo = findViewById(R.id.tvUpdateInfo);
 
         // Register receiver update dari OverlayService
@@ -313,6 +324,7 @@ public class SetupActivity extends AppCompatActivity {
     private android.os.Handler monitorHandler = null;
     private Runnable monitorRunnable = null;
     private android.widget.Button  btnUpdate    = null;
+    private android.widget.Button  btnForceStop = null;
     private android.widget.TextView tvUpdateInfo = null;
     private android.content.BroadcastReceiver updateReceiver = null;
 
