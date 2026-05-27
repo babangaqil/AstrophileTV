@@ -230,6 +230,8 @@ public class OverlayService extends Service {
             return;
         }
 
+        // Mulai sinkronisasi server time — wajib agar sisaSec akurat vs kasir
+        firebaseManager.startServerTimeSync();
         attachAllFirebaseListeners();
         startTicker();
         initTTS();
@@ -263,6 +265,9 @@ public class OverlayService extends Service {
                 // Hanya update status online — listener sudah persistent, tidak perlu re-attach
                 firebaseManager.setTvOnline(tvNum, true);
                 firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
+                // Sinkronisasi server time offset ke SessionManager agar getRemainingSeconds() akurat
+                sessionManager.setServerTimeOffset(
+                    firebaseManager.getServerNow() - System.currentTimeMillis());
             }
             @Override public void onDisconnected() {
                 Log.w(TAG, "Firebase DISCONNECTED — goOnline in 5s");
@@ -602,10 +607,9 @@ public class OverlayService extends Service {
         final boolean isPaused = sessionManager.isPaused();
         final long startTime   = sessionManager.getStartTime();
         final long duration    = sessionManager.getDuration();
-        final long effNow      = isPaused ? sessionManager.getPausedAt() : System.currentTimeMillis();
-        // Hitung sisaMs (presisi ms) dan snapMs di titik yang sama
-        // agar tidak ada drift akibat Thread.sleep / WebView init overhead
-        final long snapMs = effNow;
+        // Gunakan server time agar sinkron dengan kasir (kasir pakai Firebase timestamp)
+        final long effNow  = isPaused ? sessionManager.getPausedAt() : firebaseManager.getServerNow();
+        final long snapMs  = firebaseManager.getServerNow(); // snapshot waktu server
         final long totalSec, sisaMs;
         if ("billing".equals(modeVal)) {
             totalSec = 0; sisaMs = effNow - startTime;
@@ -644,7 +648,7 @@ public class OverlayService extends Service {
                         + "&totalSec="    + Math.max(0, totalSec)
                         + "&sisaSec="     + (sisaMs / 1000.0)
                         + "&fbStartTime=" + safeStart
-                        + "&loadMs="      + snapMs
+                        + "&snapMs="      + snapMs
                         + "&paused="      + (isPaused ? "1" : "0");
                     wv.loadUrl(url);
                     timeOverlayWv = wv;
