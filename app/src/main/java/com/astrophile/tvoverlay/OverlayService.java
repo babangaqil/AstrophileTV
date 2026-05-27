@@ -69,6 +69,11 @@ public class OverlayService extends Service {
     private boolean isShowingTimeOverlay = false;
     private String  currentBayarStatus   = "belum";
 
+    // Widget state tracking — hindari redundant UI calls tiap tick
+    private int  lastWidgetVisibility  = -1;   // View.GONE / View.VISIBLE
+    private int  lastWidgetBgRes       = -1;   // R.drawable.widget_bg_*
+    private int  lastWidgetTextColor   = 0;    // warna hex
+
     // License refs
     private com.google.firebase.database.DatabaseReference  licenseRef      = null;
     private com.google.firebase.database.ValueEventListener licenseListener = null;
@@ -196,6 +201,7 @@ public class OverlayService extends Service {
         sessionManager.setListener(new SessionManager.SessionListener() {
             @Override public void onSessionStarted() {
                 mainHandler.post(() -> {
+                    resetWidgetState();
                     webViewManager.destroyAll();
                     isShowingTimeOverlay = false;
                     firebaseManager.clearTvControlCmd(tvNum);
@@ -211,7 +217,7 @@ public class OverlayService extends Service {
                 mainHandler.post(() -> showExpiredOverlay());
             }
             @Override public void onSessionReset() {
-                mainHandler.post(() -> hideAll());
+                mainHandler.post(() -> { resetWidgetState(); hideAll(); });
             }
         });
     }
@@ -334,7 +340,7 @@ public class OverlayService extends Service {
     private void startTicker() {
         timerManager.startTicker(() -> {
             if (!sessionManager.isActive() || sessionManager.isExpired()) return;
-            mainHandler.post(() -> { if (!sessionManager.isExpired()) updateWidget(); });
+            if (!sessionManager.isExpired()) updateWidget();
             if (sessionManager.getStartTime() == 0) {
                 Log.w(TAG, "active but startTime=0 — force re-fetch");
                 firebaseManager.listenSession(tvNum, new FirebaseManager.SessionDataCallback() {
@@ -356,7 +362,7 @@ public class OverlayService extends Service {
 
     private void updateWidget() {
         if (!sessionManager.isActive() || sessionManager.getStartTime() == 0) return;
-        if (sessionManager.isBilling()) { widgetView.setVisibility(View.GONE); return; }
+        if (sessionManager.isBilling()) { setWidgetVisibility(View.GONE); return; }
 
         long secs = sessionManager.getRemainingSeconds();
 
@@ -365,17 +371,19 @@ public class OverlayService extends Service {
             TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
             if (tvTime  != null) tvTime.setText(formatTime(secs));
             if (tvLabel != null) tvLabel.setText("⏸ DIJEDA");
-            widgetView.setVisibility(secs <= 300 ? View.VISIBLE : View.GONE);
+            setWidgetVisibility(secs <= 300 ? View.VISIBLE : View.GONE);
             return;
         }
 
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
+
+        // Selalu update teks waktu tiap tick
         if (tvTime != null) tvTime.setText(formatTime(secs));
 
         if (secs <= 0) {
-            widgetView.setVisibility(View.GONE);
+            setWidgetVisibility(View.GONE);
             sessionManager.markExpired();
             try {
                 // Tulis expired:true + active:true agar kasir tahu sesi habis (v1.9 behaviour)
@@ -388,10 +396,18 @@ public class OverlayService extends Service {
         }
 
         if (secs <= 60) {
-            widgetView.setVisibility(View.VISIBLE);
-            if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
+            // SEGERA HABIS — widget selalu tampil, hanya update property jika berubah
+            setWidgetVisibility(View.VISIBLE);
+            int colorRed = Color.parseColor("#ff1a50");
+            if (tvTime  != null && lastWidgetTextColor != colorRed) {
+                tvTime.setTextColor(colorRed);
+                lastWidgetTextColor = colorRed;
+            }
             if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
-            if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
+            if (bgView  != null && lastWidgetBgRes != R.drawable.widget_bg_danger) {
+                bgView.setBackgroundResource(R.drawable.widget_bg_danger);
+                lastWidgetBgRes = R.drawable.widget_bg_danger;
+            }
             if (!sessionManager.isToast1Shown()) {
                 sessionManager.setToast1Shown(true);
                 speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
@@ -399,19 +415,35 @@ public class OverlayService extends Service {
         } else if (secs <= 300) {
             if (!sessionManager.isToast5Shown()) {
                 sessionManager.setToast5Shown(true);
-                widgetView.setVisibility(View.VISIBLE);
-                if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
+                setWidgetVisibility(View.VISIBLE);
+                int colorYellow = Color.parseColor("#ffcc00");
+                if (tvTime  != null) { tvTime.setTextColor(colorYellow); lastWidgetTextColor = colorYellow; }
                 if (tvLabel != null) tvLabel.setText("SISA WAKTU");
-                if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
+                if (bgView  != null) { bgView.setBackgroundResource(R.drawable.widget_bg_warning); lastWidgetBgRes = R.drawable.widget_bg_warning; }
                 speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
                 mainHandler.postDelayed(() -> {
                     if (sessionManager.getRemainingSeconds() > 60)
-                        widgetView.setVisibility(View.GONE);
+                        setWidgetVisibility(View.GONE);
                 }, 10_000);
             }
         } else {
-            widgetView.setVisibility(View.GONE);
+            setWidgetVisibility(View.GONE);
         }
+    }
+
+    /** Helper: set visibility hanya jika berubah — hindari WindowManager invalidate berulang. */
+    private void setWidgetVisibility(int visibility) {
+        if (lastWidgetVisibility != visibility) {
+            widgetView.setVisibility(visibility);
+            lastWidgetVisibility = visibility;
+        }
+    }
+
+    /** Reset widget state tracking saat sesi baru dimulai. */
+    private void resetWidgetState() {
+        lastWidgetVisibility = -1;
+        lastWidgetBgRes      = -1;
+        lastWidgetTextColor  = 0;
     }
 
     // =========================================================
@@ -958,3 +990,4 @@ public class OverlayService extends Service {
                      : String.format(Locale.US,"%02d:%02d",m,s);
     }
 }
+
