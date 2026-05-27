@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet" onerror="this.remove()">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:transparent;display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding-top:20px;overflow:hidden;}
+.card{
+  background:rgba(8,8,18,0.90);
+  border-radius:18px;
+  padding:14px 0 12px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  box-shadow:0 0 0 1px rgba(255,255,255,0.08),0 6px 30px rgba(0,0,0,0.70);
+  width:320px;
+  overflow:hidden;
+  animation:fadeIn 0.3s ease forwards;
+}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-12px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeOut{from{opacity:1;transform:translateY(0);}to{opacity:0;transform:translateY(-10px);}}
+.card.hiding{animation:fadeOut 0.4s ease forwards;}
+.mode-label{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;color:rgba(255,255,255,0.35);text-align:center;}
+.time-display{
+  font-family:'Orbitron',monospace;
+  font-size:48px;font-weight:900;
+  letter-spacing:2px;line-height:1.1;
+  font-variant-numeric:tabular-nums;
+  text-align:center;
+  width:100%;
+  display:block;
+}
+.sub-label{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,0.25);text-align:center;}
+.progress-wrap{width:80%;height:2px;background:rgba(255,255,255,0.07);border-radius:100px;margin-top:8px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:100px;transition:width 1s linear;}
+@keyframes blink{from{opacity:1;}to{opacity:0.3;}}
+.blink{animation:blink 0.5s ease-in-out infinite alternate;}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="mode-label" id="modeLabel">SISA WAKTU</div>
+  <div class="time-display" id="timeDisplay">--:--</div>
+  <div class="sub-label" id="subLabel">TV 1</div>
+  <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:100%;"></div></div>
+</div>
+<script>
+function getParam(name){
+  var url=window.location.href,idx=url.indexOf('?');
+  if(idx<0)return null;
+  var params=url.slice(idx+1).split('&');
+  for(var i=0;i<params.length;i++){var p=params[i].split('=');if(decodeURIComponent(p[0])===name)return decodeURIComponent(p[1]||'')}
+  return null
+}
+function pad(n){return n<10?'0'+n:''+n}
+function formatTime(s){
+  s=Math.max(0,Math.floor(s));
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  if(h>0)return pad(h)+':'+pad(m)+':'+pad(sec);
+  return pad(m)+':'+pad(sec)
+}
+
+var COLORS={
+  billing:{color:'#00b8ff',shadow:'rgba(0,184,255,0.80)',bar:'linear-gradient(90deg,#0080ff,#00b8ff)'},
+  green:  {color:'#00e676',shadow:'rgba(0,230,118,0.80)',bar:'linear-gradient(90deg,#00c853,#00e676)'},
+  yellow: {color:'#ffcc00',shadow:'rgba(255,200,0,0.80)', bar:'linear-gradient(90deg,#ff8f00,#ffcc00)'},
+  red:    {color:'#ff2d6e',shadow:'rgba(255,45,110,0.80)',bar:'linear-gradient(90deg,#ff0040,#ff2d6e)'}
+}
+
+function getColorKey(sisa){
+  if(mode==='billing')return 'billing';
+  if(sisa>300)return 'green';
+  if(sisa>60)return 'yellow';
+  return 'red'
+}
+
+function applyColor(sisa){
+  var key=getColorKey(sisa),c=COLORS[key];
+  var el=document.getElementById('timeDisplay');
+  el.style.color=c.color;
+  el.style.textShadow='0 0 20px '+c.shadow+',0 0 40px '+c.shadow.replace('0.80','0.35');
+  document.getElementById('progressFill').style.background=c.bar;
+  if(key==='red')el.classList.add('blink');else el.classList.remove('blink');
+}
+
+function getSisa(){
+  // Saat di-pause, waktu tidak bertambah — tampilkan sisa saat pause (dari Java)
+  if(isPaused) return Math.max(0, sisaSecInit);
+  // Hitung elapsed sejak overlay di-load (pakai jam lokal TV sebagai delta, bukan absolut server)
+  var elapsedSinceLoad=(Date.now()-loadMs)/1000;
+  if(mode==='countdown'){
+    return Math.max(0, sisaSecInit - elapsedSinceLoad);
+  }else{
+    return sisaSecInit + elapsedSinceLoad;
+  }
+}
+
+var mode=getParam('mode')||'countdown';
+var tvNum=getParam('tvNum')||'1';
+var totalSec=parseInt(getParam('totalSec')||'0');
+var sisaSecInit=parseFloat(getParam('sisaSec')||'0');
+var fbStartTime=parseInt(getParam('fbStartTime')||'0');
+var loadMs=parseInt(getParam('loadMs')||''+Date.now());
+var isPaused=getParam('paused')==='1';
+
+document.getElementById('modeLabel').textContent=isPaused
+  ? '⏸ DIJEDA'
+  : (mode==='countdown'?'SISA WAKTU':'DURASI MAIN');
+document.getElementById('subLabel').textContent='TV '+tvNum;
+
+// Jalankan langsung — tidak tunggu font (font bisa gagal load di Android TV offline)
+function startTimer(){
+  var initSisa=getSisa();
+  document.getElementById('timeDisplay').textContent=formatTime(initSisa);
+  applyColor(initSisa);
+  if(totalSec>0&&mode==='countdown'){
+    document.getElementById('progressFill').style.width=Math.min(100,(initSisa/totalSec)*100)+'%';
+  }
+
+  var ticker=setInterval(function(){
+    var sisa=getSisa();
+    document.getElementById('timeDisplay').textContent=formatTime(sisa);
+    applyColor(sisa);
+    if(totalSec>0&&mode==='countdown'){
+      document.getElementById('progressFill').style.width=Math.min(100,Math.max(0,(sisa/totalSec)*100))+'%';
+    }
+  },1000);
+
+  setTimeout(function(){
+    clearInterval(ticker);
+    document.getElementById('card').classList.add('hiding');
+  },4600);
+}
+
+// Coba tunggu font max 500ms, kalau tidak siap langsung jalan
+var _fontTimeout=setTimeout(startTimer,500);
+if(typeof document.fonts!=='undefined'&&document.fonts.ready){
+  document.fonts.ready.then(function(){
+    clearTimeout(_fontTimeout);
+    startTimer();
+  });
+}
+</script>
+</body>
+</html>

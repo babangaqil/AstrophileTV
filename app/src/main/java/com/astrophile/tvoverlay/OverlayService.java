@@ -230,9 +230,6 @@ public class OverlayService extends Service {
             return;
         }
 
-        // Sync server time offset — agar getRemainingSeconds() pakai jam server, bukan jam lokal TV
-        firebaseManager.startServerTimeSync();
-
         attachAllFirebaseListeners();
         startTicker();
         initTTS();
@@ -337,9 +334,6 @@ public class OverlayService extends Service {
     private void startTicker() {
         timerManager.startTicker(() -> {
             if (!sessionManager.isActive() || sessionManager.isExpired()) return;
-            // Selalu update offset sebelum hitung sisa waktu — pastikan jam sinkron
-            sessionManager.setServerTimeOffset(
-                firebaseManager.getServerNow() - System.currentTimeMillis());
             mainHandler.post(() -> { if (!sessionManager.isExpired()) updateWidget(); });
             if (sessionManager.getStartTime() == 0) {
                 Log.w(TAG, "active but startTime=0 — force re-fetch");
@@ -394,7 +388,6 @@ public class OverlayService extends Service {
         }
 
         if (secs <= 60) {
-            // Selalu VISIBLE + update warna tiap tick — widget mungkin GONE dari postDelayed 5-menit
             widgetView.setVisibility(View.VISIBLE);
             if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
             if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
@@ -404,7 +397,6 @@ public class OverlayService extends Service {
                 speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
             }
         } else if (secs <= 300) {
-            // Teks waktu sudah di-set di atas tiap tick — hanya urus visibility & one-time toast
             if (!sessionManager.isToast5Shown()) {
                 sessionManager.setToast5Shown(true);
                 widgetView.setVisibility(View.VISIBLE);
@@ -413,7 +405,6 @@ public class OverlayService extends Service {
                 if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
                 speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
                 mainHandler.postDelayed(() -> {
-                    // Sembunyikan hanya jika masih di range 5 menit — jangan sembunyikan saat sudah ≤ 1 menit
                     if (sessionManager.getRemainingSeconds() > 60)
                         widgetView.setVisibility(View.GONE);
                 }, 10_000);
@@ -421,9 +412,6 @@ public class OverlayService extends Service {
         } else {
             widgetView.setVisibility(View.GONE);
         }
-        // Force WindowManager redraw — postInvalidate tidak cukup untuk overlay dari Service
-        try { windowManager.updateViewLayout(widgetView, widgetView.getLayoutParams()); }
-        catch (Exception ignored) {}
     }
 
     // =========================================================
@@ -615,11 +603,14 @@ public class OverlayService extends Service {
         final long startTime   = sessionManager.getStartTime();
         final long duration    = sessionManager.getDuration();
         final long effNow      = isPaused ? sessionManager.getPausedAt() : System.currentTimeMillis();
-        final long totalSec, sisaSec;
+        // Hitung sisaMs (presisi ms) dan snapMs di titik yang sama
+        // agar tidak ada drift akibat Thread.sleep / WebView init overhead
+        final long snapMs = effNow;
+        final long totalSec, sisaMs;
         if ("billing".equals(modeVal)) {
-            totalSec = 0; sisaSec = (effNow - startTime) / 1000;
+            totalSec = 0; sisaMs = effNow - startTime;
         } else {
-            totalSec = duration; sisaSec = Math.max(0, duration - (effNow - startTime) / 1000);
+            totalSec = duration; sisaMs = Math.max(0, duration * 1000L - (effNow - startTime));
         }
         mainHandler.post(new Runnable() {
             @Override public void run() {
@@ -646,13 +637,14 @@ public class OverlayService extends Service {
                     wv.getSettings().setJavaScriptEnabled(true);
                     wv.getSettings().setDomStorageEnabled(true);
                     long safeStart = startTime > 0 ? startTime : System.currentTimeMillis();
+                    // sisaSec dalam desimal (ms/1000.0) + loadMs=snapMs agar JS akurat
                     String url = "file:///android_asset/timeoverlay.html"
                         + "?mode="        + android.net.Uri.encode(modeVal)
                         + "&tvNum="       + tvNum
                         + "&totalSec="    + Math.max(0, totalSec)
-                        + "&sisaSec="     + Math.max(0, sisaSec)
+                        + "&sisaSec="     + (sisaMs / 1000.0)
                         + "&fbStartTime=" + safeStart
-                        + "&loadMs="      + System.currentTimeMillis()
+                        + "&loadMs="      + snapMs
                         + "&paused="      + (isPaused ? "1" : "0");
                     wv.loadUrl(url);
                     timeOverlayWv = wv;
@@ -717,12 +709,8 @@ public class OverlayService extends Service {
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             ot, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
         wp.gravity = Gravity.BOTTOM | Gravity.END; wp.x = 24; wp.y = 24;
-
-        // LAYER_TYPE_NONE — biarkan sistem handle rendering, HARDWARE justru cache layer & freeze teks
-        widgetView.setLayerType(View.LAYER_TYPE_NONE, null);
 
         WindowManager.LayoutParams tp = new WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
