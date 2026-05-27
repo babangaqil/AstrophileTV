@@ -153,7 +153,7 @@ public class OverlayService extends Service {
         timerManager.destroyAll();
         stopWidgetCountDown();
         firebaseManager.destroyAll();
-        if (localHttpServer != null) localHttpServer.stopServer();
+        if (localHttpServer != null) localHttpServer.stop();
         webViewManager.destroyAll();
         audioManager.destroy();
 
@@ -201,6 +201,7 @@ public class OverlayService extends Service {
             localHttpServer = new LocalHttpServer(payload -> {
                 mainHandler.post(() -> handleLocalCommand(payload));
             });
+            localHttpServer.start();
         } catch (Exception e) {
             Log.e(TAG, "Gagal start HTTP server: " + e.getMessage());
         }

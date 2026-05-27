@@ -163,7 +163,7 @@ public class SessionManager {
      * Struktur payload sama persis dengan Firebase activeSessions.
      */
     public void applyFromLocal(boolean active, boolean fbExpired, String mode,
-                                long start, long duration, Long pausedAt, String namaP) {
+                                long start, long duration, long pausedAt, String namaP) {
         // Delegasi ke applyFromFirebase — logic identik
         applyFromFirebase(active, fbExpired, mode, start, duration, pausedAt, namaP);
     }
