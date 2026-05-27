@@ -258,9 +258,7 @@ public class OverlayService extends Service {
         firebaseManager.listenConnection(new FirebaseManager.ConnectionCallback() {
             @Override public void onConnected() {
                 Log.d(TAG, "Firebase CONNECTED");
-                // Force fetch dari server agar data segar (seperti v1.9)
-                try { com.google.firebase.database.FirebaseDatabase.getInstance().goOnline(); } catch (Exception e) {}
-                attachAllFirebaseListeners();
+                // Hanya update status online — listener sudah persistent, tidak perlu re-attach
                 firebaseManager.setTvOnline(tvNum, true);
                 firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
             }
