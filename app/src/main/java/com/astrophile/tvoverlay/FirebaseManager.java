@@ -30,6 +30,13 @@ public class FirebaseManager {
     private FirebaseDatabase db;
     private final Context    ctx;
 
+    // ── Server time offset — koreksi jam lokal Android vs Firebase ─
+    // offset = serverTime - localTime (bisa positif atau negatif)
+    private volatile long serverTimeOffsetMs = 0L;
+
+    private DatabaseReference serverTimeRef;
+    private ValueEventListener serverTimeListener;
+
     // ── Refs + Listeners — semua disimpan agar bisa di-remove ─
     private DatabaseReference sessionRef;
     private ValueEventListener sessionListener;
@@ -119,6 +126,39 @@ public class FirebaseManager {
     }
 
     public boolean isReady() { return db != null; }
+
+    /** Kembalikan estimasi waktu server saat ini (ms), sudah dikoreksi offset. */
+    public long getServerNow() {
+        return System.currentTimeMillis() + serverTimeOffsetMs;
+    }
+
+    /** Mulai listen .info/serverTimeOffset — update otomatis saat ada perubahan jaringan. */
+    public void startServerTimeSync() {
+        if (db == null) return;
+        stopServerTimeSync();
+        serverTimeRef = db.getReference(".info/serverTimeOffset");
+        serverTimeListener = new ValueEventListener() {
+            @Override public void onDataChange(DataSnapshot snap) {
+                Object raw = snap.getValue();
+                if (raw instanceof Number) {
+                    serverTimeOffsetMs = ((Number) raw).longValue();
+                    Log.d(TAG, "serverTimeOffset updated: " + serverTimeOffsetMs + "ms");
+                }
+            }
+            @Override public void onCancelled(DatabaseError e) {
+                Log.w(TAG, "serverTimeOffset listen cancelled: " + e.getMessage());
+            }
+        };
+        serverTimeRef.addValueEventListener(serverTimeListener);
+    }
+
+    public void stopServerTimeSync() {
+        if (serverTimeRef != null && serverTimeListener != null) {
+            serverTimeRef.removeEventListener(serverTimeListener);
+        }
+        serverTimeListener = null;
+        serverTimeRef      = null;
+    }
 
     // ── Session listener ──────────────────────────────────────
     public void listenSession(int tvNum, SessionDataCallback cb) {
@@ -342,6 +382,7 @@ public class FirebaseManager {
     // ── Destroy ALL listeners — wajib dipanggil di onDestroy ─
     public void destroyAll() {
         Log.d(TAG, "destroyAll() — removing all Firebase listeners");
+        stopServerTimeSync();
         removeSessionListener();
         removeConnectionListener();
         removeStoreNameListener();

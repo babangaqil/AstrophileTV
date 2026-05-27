@@ -14,6 +14,19 @@ public class SessionManager {
 
     private static final String TAG = "AstroSession";
 
+    // ── Server time supplier — diisi oleh OverlayService setelah Firebase init ─
+    // Default: System.currentTimeMillis() (sebelum offset tersedia)
+    private java.util.concurrent.atomic.AtomicLong serverTimeOffset =
+        new java.util.concurrent.atomic.AtomicLong(0L);
+
+    public void setServerTimeOffset(long offsetMs) {
+        serverTimeOffset.set(offsetMs);
+    }
+
+    private long serverNow() {
+        return System.currentTimeMillis() + serverTimeOffset.get();
+    }
+
     // ── Session State ─────────────────────────────────────────
     private volatile boolean active      = false;
     private volatile boolean expired     = false;
@@ -61,10 +74,6 @@ public class SessionManager {
             boolean fbActive, boolean fbExpired, String fbMode,
             long fbStart, long fbDuration, String fbNama, long fbPausedAt) {
 
-        // Simpan state sebelumnya untuk menentukan apakah ini sesi BARU atau update rutin
-        boolean wasActive = this.active;
-        long    wasStart  = this.startTime;
-
         this.active        = fbActive;
         this.expired       = fbExpired;
         this.mode          = fbMode   != null ? fbMode   : "";
@@ -80,15 +89,9 @@ public class SessionManager {
             if (fbExpired) {
                 // Firebase sudah expired — langsung trigger overlay tanpa tunggu countdown
                 listener.onSessionExpired();
-            } else if (!wasActive || wasStart != fbStart) {
-                // Hanya trigger onSessionStarted jika ini benar-benar sesi BARU
-                // (sebelumnya tidak aktif, atau startTime berubah = sesi berbeda)
-                // Update rutin Firebase (bayarStatus, pausedAt, dll) tidak trigger ini
-                toast5Shown = false;
-                toast1Shown = false;
+            } else {
                 listener.onSessionStarted();
             }
-            // Update rutin saat sesi sudah berjalan — tidak perlu restart apapun
         }
     }
 
@@ -128,7 +131,7 @@ public class SessionManager {
     /** Sisa detik countdown. 0 jika bukan countdown atau sudah habis. */
     public long getRemainingSeconds() {
         if (!"countdown".equals(mode) || startTime == 0) return 0L;
-        long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+        long effectiveNow = (pausedAt > 0) ? pausedAt : serverNow();
         long elapsed = (effectiveNow - startTime) / 1000;
         return Math.max(0L, duration - elapsed);
     }
@@ -136,7 +139,7 @@ public class SessionManager {
     /** Elapsed detik billing. */
     public long getElapsedSeconds() {
         if (startTime == 0) return 0L;
-        long effectiveNow = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+        long effectiveNow = (pausedAt > 0) ? pausedAt : serverNow();
         return (effectiveNow - startTime) / 1000;
     }
 
