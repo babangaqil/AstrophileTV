@@ -189,6 +189,7 @@ public class OverlayService extends Service {
     private void initManagers() {
         sessionManager  = new SessionManager();
         firebaseManager = new FirebaseManager(this);
+        sessionManager.setFirebaseManager(firebaseManager); // single source of truth server time
         webViewManager  = new WebViewManager(this, windowManager);
         timerManager    = new TimerManager(mainHandler);
         audioManager    = new AstroAudioManager();

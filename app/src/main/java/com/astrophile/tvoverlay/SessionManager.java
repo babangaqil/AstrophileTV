@@ -14,16 +14,24 @@ public class SessionManager {
 
     private static final String TAG = "AstroSession";
 
-    // ── Server time supplier — diisi oleh OverlayService setelah Firebase init ─
-    // Default: System.currentTimeMillis() (sebelum offset tersedia)
+    // ── Server time supplier — selalu sinkron dengan FirebaseManager ─────────
     private java.util.concurrent.atomic.AtomicLong serverTimeOffset =
         new java.util.concurrent.atomic.AtomicLong(0L);
+
+    // Supplier langsung dari FirebaseManager — prioritas utama
+    private FirebaseManager firebaseManager = null;
+
+    public void setFirebaseManager(FirebaseManager fm) {
+        this.firebaseManager = fm;
+    }
 
     public void setServerTimeOffset(long offsetMs) {
         serverTimeOffset.set(offsetMs);
     }
 
     private long serverNow() {
+        // Pakai FirebaseManager.getServerNow() — single source of truth
+        if (firebaseManager != null) return firebaseManager.getServerNow();
         return System.currentTimeMillis() + serverTimeOffset.get();
     }
 
