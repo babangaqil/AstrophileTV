@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet" onerror="this.remove()">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:transparent;display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding-top:20px;overflow:hidden;}
@@ -110,8 +110,8 @@ document.getElementById('modeLabel').textContent=isPaused
   : (mode==='countdown'?'SISA WAKTU':'DURASI MAIN');
 document.getElementById('subLabel').textContent='TV '+tvNum;
 
-// Tunggu font load dulu baru tampilkan angka
-document.fonts.ready.then(function(){
+// Jalankan langsung — tidak tunggu font (font bisa gagal load di Android TV offline)
+function startTimer(){
   var initSisa=getSisa();
   document.getElementById('timeDisplay').textContent=formatTime(initSisa);
   applyColor(initSisa);
@@ -132,7 +132,16 @@ document.fonts.ready.then(function(){
     clearInterval(ticker);
     document.getElementById('card').classList.add('hiding');
   },4600);
-});
+}
+
+// Coba tunggu font max 500ms, kalau tidak siap langsung jalan
+var _fontTimeout=setTimeout(startTimer,500);
+if(typeof document.fonts!=='undefined'&&document.fonts.ready){
+  document.fonts.ready.then(function(){
+    clearTimeout(_fontTimeout);
+    startTimer();
+  });
+}
 </script>
 </body>
 </html>
