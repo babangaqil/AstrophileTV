@@ -13,6 +13,9 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
+import org.json.JSONObject;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -150,6 +153,7 @@ public class OverlayService extends Service {
         timerManager.destroyAll();
         stopWidgetCountDown();
         firebaseManager.destroyAll();
+        if (localHttpServer != null) localHttpServer.stopServer();
         webViewManager.destroyAll();
         audioManager.destroy();
 
@@ -192,6 +196,14 @@ public class OverlayService extends Service {
         sessionManager  = new SessionManager();
         firebaseManager = new FirebaseManager(this);
         sessionManager.setFirebaseManager(firebaseManager); // single source of truth server time
+        // Jalankan HTTP server untuk mode offline (LAN)
+        try {
+            localHttpServer = new LocalHttpServer(payload -> {
+                mainHandler.post(() -> handleLocalCommand(payload));
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Gagal start HTTP server: " + e.getMessage());
+        }
         webViewManager  = new WebViewManager(this, windowManager);
         timerManager    = new TimerManager(mainHandler);
         audioManager    = new AstroAudioManager();
@@ -1005,4 +1017,49 @@ public class OverlayService extends Service {
         return h > 0 ? String.format(Locale.US,"%d:%02d:%02d",h,m,s)
                      : String.format(Locale.US,"%02d:%02d",m,s);
     }
+
+    // ── Handle perintah dari kasir via HTTP LAN (mode offline) ────────────────
+    private void handleLocalCommand(JSONObject p) {
+        try {
+            // Payload sama persis dengan struktur Firebase activeSessions
+            boolean active   = p.optBoolean("active", false);
+            boolean expired  = p.optBoolean("expired", false);
+            String  mode     = p.optString("mode", "countdown");
+            long    start    = p.optLong("start", 0);
+            long    duration = p.optLong("duration", 0);
+            long    pausedAt = p.optLong("pausedAt", 0);
+            String  namaP    = p.optString("namaPelanggan", "");
+
+            // Gunakan SessionManager — sama persis dengan flow Firebase
+            sessionManager.applyFromLocal(active, expired, mode, start, duration,
+                pausedAt > 0 ? pausedAt : null, namaP);
+
+            Log.d(TAG, "handleLocalCommand: active=" + active + " mode=" + mode
+                + " expired=" + expired + " start=" + start);
+        } catch (Exception e) {
+            Log.e(TAG, "handleLocalCommand error: " + e.getMessage());
+        }
+    }
+
+    /** Ambil IP lokal WiFi device ini — ditampilkan di SetupActivity */
+    public static String getLocalIpAddress() {
+        try {
+            java.util.Enumeration<NetworkInterface> nets =
+                NetworkInterface.getNetworkInterfaces();
+            while (nets.hasMoreElements()) {
+                NetworkInterface ni = nets.nextElement();
+                if (ni.isLoopback() || !ni.isUp()) continue;
+                java.util.Enumeration<InetAddress> addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    InetAddress addr = addrs.nextElement();
+                    if (!addr.isLoopbackAddress()
+                            && addr instanceof java.net.Inet4Address) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception e) { Log.e("OverlayService", "getLocalIpAddress: " + e); }
+        return "0.0.0.0";
+    }
+
 }

@@ -153,6 +153,14 @@ public class SetupActivity extends AppCompatActivity {
             tvDeviceInfo.setVisibility(View.VISIBLE);
         }
 
+        // Tampilkan IP lokal TV untuk mode offline kasir
+        TextView tvIpInfo = findViewById(R.id.tvIpInfo);
+        if (tvIpInfo != null) {
+            String ip = OverlayService.getLocalIpAddress();
+            tvIpInfo.setText("📡 IP TV (Offline): " + ip + ":8080");
+            tvIpInfo.setVisibility(View.VISIBLE);
+        }
+
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
         etTvName.setText(prefs.getString("tvName", ""));

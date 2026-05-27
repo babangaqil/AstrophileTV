@@ -157,4 +157,15 @@ public class SessionManager {
 
     public boolean isCountdown() { return "countdown".equals(mode); }
     public boolean isBilling()   { return "billing".equals(mode); }
+
+    /**
+     * Dipanggil saat menerima perintah dari kasir via HTTP LAN (mode offline).
+     * Struktur payload sama persis dengan Firebase activeSessions.
+     */
+    public void applyFromLocal(boolean active, boolean fbExpired, String mode,
+                                long start, long duration, Long pausedAt, String namaP) {
+        // Delegasi ke applyFromFirebase — logic identik
+        applyFromFirebase(active, fbExpired, mode, start, duration, pausedAt, namaP);
+    }
+
 }
