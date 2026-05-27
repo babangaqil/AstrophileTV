@@ -1,6 +1,5 @@
 package com.astrophile.tvoverlay;
 
-import android.content.Context;
 import android.util.Log;
 import org.json.JSONObject;
 import java.io.IOException;
@@ -8,9 +7,9 @@ import java.util.Map;
 import fi.iki.elonen.NanoHTTPD;
 
 /**
- * HTTP server yang berjalan di Android TV.
- * Kasir kirim perintah via HTTP POST ke IP TV port 8080.
- * Endpoint: POST /command  body: JSON { action, tvNum, duration, start, mode, pausedAt, expired, active }
+ * HTTP server yang berjalan di Android TV (port 8080).
+ * Kasir kirim perintah via HTTP POST ke IP TV.
+ * Endpoint: POST /command  body: JSON { active, expired, mode, start, duration, pausedAt, ... }
  */
 public class LocalHttpServer extends NanoHTTPD {
 
@@ -46,20 +45,27 @@ public class LocalHttpServer extends NanoHTTPD {
                 JSONObject payload = new JSONObject(json);
                 Log.d(TAG, "Command received: " + payload);
                 if (listener != null) listener.onCommand(payload);
-                return corsResponse(newFixedLengthResponse("{"ok":true}"));
+                return corsResponse(newFixedLengthResponse("{\"ok\":true}"));
             } catch (Exception e) {
                 Log.e(TAG, "Error: " + e.getMessage());
-                return corsResponse(newFixedLengthResponse(Response.Status.INTERNAL_ERROR,
-                    "application/json", "{"ok":false,"error":"" + e.getMessage() + ""}"));
+                String errMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'") : "unknown";
+                return corsResponse(newFixedLengthResponse(
+                    Response.Status.INTERNAL_ERROR,
+                    "application/json",
+                    "{\"ok\":false,\"error\":\"" + errMsg + "\"}"
+                ));
             }
         }
 
         if (session.getMethod() == Method.GET && session.getUri().equals("/ping")) {
-            return corsResponse(newFixedLengthResponse("{"ok":true,"server":"AstrophileTV"}"));
+            return corsResponse(newFixedLengthResponse("{\"ok\":true,\"server\":\"AstrophileTV\"}"));
         }
 
-        return corsResponse(newFixedLengthResponse(Response.Status.NOT_FOUND,
-            "application/json", "{"ok":false,"error":"not found"}"));
+        return corsResponse(newFixedLengthResponse(
+            Response.Status.NOT_FOUND,
+            "application/json",
+            "{\"ok\":false,\"error\":\"not found\"}"
+        ));
     }
 
     private Response corsResponse(Response r) {
