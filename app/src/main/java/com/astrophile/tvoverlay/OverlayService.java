@@ -640,8 +640,7 @@ public class OverlayService extends Service {
                     wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
                     wv.getSettings().setJavaScriptEnabled(true);
                     wv.getSettings().setDomStorageEnabled(true);
-                    long safeStart = startTime > 0 ? startTime : System.currentTimeMillis();
-                    // sisaSec = sisa detik presisi desimal, dihitung dari server time
+                    // sisaSec = sisa detik presisi desimal, dihitung dari sessionManager
                     String url = "file:///android_asset/timeoverlay.html"
                         + "?mode="     + android.net.Uri.encode(modeVal)
                         + "&tvNum="    + tvNum
