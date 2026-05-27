@@ -82,33 +82,46 @@ function applyColor(sisa){
   if(key==='red')el.classList.add('blink');else el.classList.remove('blink');
 }
 
-function getSisa(){
-  // Saat di-pause, waktu tidak bertambah — tampilkan sisa saat pause (dari Java)
-  if(isPaused) return Math.max(0, sisaSecInit);
-  // Hitung elapsed sejak overlay di-load (pakai jam lokal TV sebagai delta, bukan absolut server)
-  var elapsedSinceLoad=(Date.now()-loadMs)/1000;
-  if(mode==='countdown'){
-    return Math.max(0, sisaSecInit - elapsedSinceLoad);
-  }else{
-    return sisaSecInit + elapsedSinceLoad;
-  }
-}
-
 var mode=getParam('mode')||'countdown';
 var tvNum=getParam('tvNum')||'1';
-var totalSec=parseInt(getParam('totalSec')||'0');
+var totalSec=parseFloat(getParam('totalSec')||'0');
 var sisaSecInit=parseFloat(getParam('sisaSec')||'0');
-var fbStartTime=parseInt(getParam('fbStartTime')||'0');
-var loadMs=parseInt(getParam('loadMs')||''+Date.now());
+var snapMs=parseFloat(getParam('snapMs')||'0');
 var isPaused=getParam('paused')==='1';
+
+// startRealMs: waktu aktual JS mulai hitung — diambil saat startTimer() dipanggil
+// Ini yang benar karena kompensasi WebView load time + font wait otomatis
+var startRealMs=0;
+
+function getSisa(){
+  if(isPaused) return Math.max(0, sisaSecInit);
+  // elapsed dihitung dari snapMs (Java snapshot) + koreksi waktu JS start
+  // Cara: sisa di snapshot = sisaSecInit, terus dikurangi elapsed sejak startRealMs
+  var elapsedSinceStart=(Date.now()-startRealMs)/1000;
+  if(mode==='countdown'){
+    return Math.max(0, sisaSecInit - elapsedSinceStart);
+  }else{
+    return sisaSecInit + elapsedSinceStart;
+  }
+}
 
 document.getElementById('modeLabel').textContent=isPaused
   ? '⏸ DIJEDA'
   : (mode==='countdown'?'SISA WAKTU':'DURASI MAIN');
 document.getElementById('subLabel').textContent='TV '+tvNum;
 
-// Jalankan langsung — tidak tunggu font (font bisa gagal load di Android TV offline)
 function startTimer(){
+  // Ambil startRealMs tepat saat timer mulai — ini kompensasi semua delay WebView/font
+  // sisaSecInit sudah dikurangi elapsed dari snapMs ke sekarang
+  var nowMs=Date.now();
+  var elapsedSinceSnap= snapMs>0 ? (nowMs-snapMs)/1000 : 0;
+  if(!isPaused && mode==='countdown'){
+    sisaSecInit=Math.max(0, sisaSecInit - elapsedSinceSnap);
+  } else if(!isPaused && mode!=='countdown'){
+    sisaSecInit=sisaSecInit + elapsedSinceSnap;
+  }
+  startRealMs=nowMs;
+
   var initSisa=getSisa();
   document.getElementById('timeDisplay').textContent=formatTime(initSisa);
   applyColor(initSisa);
