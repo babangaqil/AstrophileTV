@@ -58,21 +58,18 @@ function formatTime(s){
   if(h>0)return pad(h)+':'+pad(m)+':'+pad(sec);
   return pad(m)+':'+pad(sec)
 }
-
 var COLORS={
   billing:{color:'#00b8ff',shadow:'rgba(0,184,255,0.80)',bar:'linear-gradient(90deg,#0080ff,#00b8ff)'},
   green:  {color:'#00e676',shadow:'rgba(0,230,118,0.80)',bar:'linear-gradient(90deg,#00c853,#00e676)'},
-  yellow: {color:'#ffcc00',shadow:'rgba(255,200,0,0.80)', bar:'linear-gradient(90deg,#ff8f00,#ffcc00)'},
+  yellow: {color:'#ffcc00',shadow:'rgba(255,200,0,0.80)',bar:'linear-gradient(90deg,#ff8f00,#ffcc00)'},
   red:    {color:'#ff2d6e',shadow:'rgba(255,45,110,0.80)',bar:'linear-gradient(90deg,#ff0040,#ff2d6e)'}
 }
-
 function getColorKey(sisa){
   if(mode==='billing')return 'billing';
   if(sisa>300)return 'green';
   if(sisa>60)return 'yellow';
-  return 'red'
+  return 'red';
 }
-
 function applyColor(sisa){
   var key=getColorKey(sisa),c=COLORS[key];
   var el=document.getElementById('timeDisplay');
@@ -82,75 +79,51 @@ function applyColor(sisa){
   if(key==='red')el.classList.add('blink');else el.classList.remove('blink');
 }
 
-var mode=getParam('mode')||'countdown';
-var tvNum=getParam('tvNum')||'1';
-var totalSec=parseFloat(getParam('totalSec')||'0');
-var sisaSecInit=parseFloat(getParam('sisaSec')||'0');
-var snapMs=parseFloat(getParam('snapMs')||'0');
-var isPaused=getParam('paused')==='1';
+var mode     = getParam('mode')||'countdown';
+var tvNum    = getParam('tvNum')||'1';
+var totalSec = parseFloat(getParam('totalSec')||'0');
+var isPaused = getParam('paused')==='1';
 
-// startRealMs: waktu aktual JS mulai hitung — diambil saat startTimer() dipanggil
-// Ini yang benar karena kompensasi WebView load time + font wait otomatis
-var startRealMs=0;
+// sisaSec = sisa detik SAAT Java kirim URL (sudah dihitung akurat dari server time)
+// startMs = Date.now() di JS saat overlay mulai — dipakai sebagai anchor countdown lokal
+var sisaSec  = parseFloat(getParam('sisaSec')||'0');
 
-function getSisa(){
-  if(isPaused) return Math.max(0, sisaSecInit);
-  // elapsed dihitung dari snapMs (Java snapshot) + koreksi waktu JS start
-  // Cara: sisa di snapshot = sisaSecInit, terus dikurangi elapsed sejak startRealMs
-  var elapsedSinceStart=(Date.now()-startRealMs)/1000;
-  if(mode==='countdown'){
-    return Math.max(0, sisaSecInit - elapsedSinceStart);
-  }else{
-    return sisaSecInit + elapsedSinceStart;
-  }
-}
-
-document.getElementById('modeLabel').textContent=isPaused
-  ? '⏸ DIJEDA'
-  : (mode==='countdown'?'SISA WAKTU':'DURASI MAIN');
-document.getElementById('subLabel').textContent='TV '+tvNum;
+document.getElementById('modeLabel').textContent = isPaused ? '⏸ DIJEDA' : (mode==='countdown' ? 'SISA WAKTU' : 'DURASI MAIN');
+document.getElementById('subLabel').textContent  = 'TV '+tvNum;
 
 function startTimer(){
-  // Ambil startRealMs tepat saat timer mulai — ini kompensasi semua delay WebView/font
-  // sisaSecInit sudah dikurangi elapsed dari snapMs ke sekarang
-  var nowMs=Date.now();
-  var elapsedSinceSnap= snapMs>0 ? (nowMs-snapMs)/1000 : 0;
-  if(!isPaused && mode==='countdown'){
-    sisaSecInit=Math.max(0, sisaSecInit - elapsedSinceSnap);
-  } else if(!isPaused && mode!=='countdown'){
-    sisaSecInit=sisaSecInit + elapsedSinceSnap;
-  }
-  startRealMs=nowMs;
+  // startMs diambil SEKARANG di JS — jadi elapsed selalu akurat dari titik ini
+  var startMs = Date.now();
 
-  var initSisa=getSisa();
-  document.getElementById('timeDisplay').textContent=formatTime(initSisa);
-  applyColor(initSisa);
-  if(totalSec>0&&mode==='countdown'){
-    document.getElementById('progressFill').style.width=Math.min(100,(initSisa/totalSec)*100)+'%';
+  function getSisa(){
+    if(isPaused) return Math.max(0, sisaSec);
+    var elapsed = (Date.now() - startMs) / 1000;
+    if(mode==='countdown') return Math.max(0, sisaSec - elapsed);
+    return sisaSec + elapsed;
   }
 
-  var ticker=setInterval(function(){
-    var sisa=getSisa();
-    document.getElementById('timeDisplay').textContent=formatTime(sisa);
+  function render(){
+    var sisa = getSisa();
+    document.getElementById('timeDisplay').textContent = formatTime(sisa);
     applyColor(sisa);
-    if(totalSec>0&&mode==='countdown'){
-      document.getElementById('progressFill').style.width=Math.min(100,Math.max(0,(sisa/totalSec)*100))+'%';
+    if(totalSec>0 && mode==='countdown'){
+      document.getElementById('progressFill').style.width = Math.min(100,Math.max(0,(sisa/totalSec)*100))+'%';
     }
-  },1000);
+  }
 
+  render();
+  setInterval(render, 1000);
+
+  // Fade out sebelum Java destroy WebView (Java destroy di 5500ms)
   setTimeout(function(){
-    clearInterval(ticker);
     document.getElementById('card').classList.add('hiding');
-  },4600);
+  }, 4600);
 }
 
-// Coba tunggu font max 500ms, kalau tidak siap langsung jalan
-var _fontTimeout=setTimeout(startTimer,500);
-if(typeof document.fonts!=='undefined'&&document.fonts.ready){
-  document.fonts.ready.then(function(){
-    clearTimeout(_fontTimeout);
-    startTimer();
-  });
+// Tunggu font max 500ms, langsung jalan kalau sudah siap
+var _t = setTimeout(startTimer, 500);
+if(typeof document.fonts!=='undefined' && document.fonts.ready){
+  document.fonts.ready.then(function(){ clearTimeout(_t); startTimer(); });
 }
 </script>
 </body>
