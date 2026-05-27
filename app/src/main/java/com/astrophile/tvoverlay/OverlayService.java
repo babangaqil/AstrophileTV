@@ -641,15 +641,13 @@ public class OverlayService extends Service {
                     wv.getSettings().setJavaScriptEnabled(true);
                     wv.getSettings().setDomStorageEnabled(true);
                     long safeStart = startTime > 0 ? startTime : System.currentTimeMillis();
-                    // sisaSec dalam desimal (ms/1000.0) + loadMs=snapMs agar JS akurat
+                    // sisaSec = sisa detik presisi desimal, dihitung dari server time
                     String url = "file:///android_asset/timeoverlay.html"
-                        + "?mode="        + android.net.Uri.encode(modeVal)
-                        + "&tvNum="       + tvNum
-                        + "&totalSec="    + Math.max(0, totalSec)
-                        + "&sisaSec="     + (sisaMs / 1000.0)
-                        + "&fbStartTime=" + safeStart
-                        + "&snapMs="      + snapMs
-                        + "&paused="      + (isPaused ? "1" : "0");
+                        + "?mode="     + android.net.Uri.encode(modeVal)
+                        + "&tvNum="    + tvNum
+                        + "&totalSec=" + Math.max(0, totalSec)
+                        + "&sisaSec="  + (sisaMs / 1000.0)
+                        + "&paused="   + (isPaused ? "1" : "0");
                     wv.loadUrl(url);
                     timeOverlayWv = wv;
                     try { windowManager.addView(timeOverlayWv, p); } catch (Exception ignored) {}
