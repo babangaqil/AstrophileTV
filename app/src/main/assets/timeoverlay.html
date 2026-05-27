@@ -83,27 +83,24 @@ function applyColor(sisa){
 }
 
 function getSisa(){
-  var nowMs=Date.now();
-  // Saat di-pause, waktu tidak bertambah — tampilkan sisa saat pause
+  // Saat di-pause, waktu tidak bertambah — tampilkan sisa saat pause (dari Java)
   if(isPaused) return Math.max(0, sisaSecInit);
+  // Hitung elapsed sejak overlay di-load (pakai jam lokal TV sebagai delta, bukan absolut server)
+  var elapsedSinceLoad=(Date.now()-loadMs)/1000;
   if(mode==='countdown'){
-    return Math.max(0,totalSec-((nowMs-fbStartTime)/1000));
+    return Math.max(0, sisaSecInit - elapsedSinceLoad);
   }else{
-    return (nowMs-fbStartTime)/1000;
+    return sisaSecInit + elapsedSinceLoad;
   }
 }
 
 var mode=getParam('mode')||'countdown';
 var tvNum=getParam('tvNum')||'1';
 var totalSec=parseInt(getParam('totalSec')||'0');
-var sisaSecInit=parseInt(getParam('sisaSec')||'0');
+var sisaSecInit=parseFloat(getParam('sisaSec')||'0');
 var fbStartTime=parseInt(getParam('fbStartTime')||'0');
 var loadMs=parseInt(getParam('loadMs')||''+Date.now());
 var isPaused=getParam('paused')==='1';
-
-if(!fbStartTime||fbStartTime<=0){
-  fbStartTime=loadMs-(totalSec-sisaSecInit)*1000;
-}
 
 document.getElementById('modeLabel').textContent=isPaused
   ? '⏸ DIJEDA'
