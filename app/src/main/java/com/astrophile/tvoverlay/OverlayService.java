@@ -1034,7 +1034,7 @@ public class OverlayService extends Service {
 
             // Gunakan SessionManager — sama persis dengan flow Firebase
             sessionManager.applyFromLocal(active, expired, mode, start, duration,
-                pausedAt > 0 ? pausedAt : null, namaP);
+                pausedAt, namaP);
 
             Log.d(TAG, "handleLocalCommand: active=" + active + " mode=" + mode
                 + " expired=" + expired + " start=" + start);
