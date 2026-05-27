@@ -153,6 +153,8 @@ public class OverlayService extends Service {
 
         timerManager.destroyAll();
         stopWidgetCountDown();
+        // Set offline sebelum destroy — untuk kasus stop/uninstall normal
+        try { firebaseManager.setTvOnline(tvNum, false); } catch (Exception ignored) {}
         firebaseManager.destroyAll();
         if (localHttpServer != null) localHttpServer.stop();
         webViewManager.destroyAll();
