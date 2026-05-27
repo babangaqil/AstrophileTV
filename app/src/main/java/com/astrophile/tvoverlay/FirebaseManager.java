@@ -355,10 +355,22 @@ public class FirebaseManager {
 
     public void setTvOnline(int tvNum, boolean online) {
         if (db == null) return;
-        db.getReference("settings/tvStatus/" + tvNum + "/online")
-            .setValue(online, (err, ref) -> {
-                if (err != null) Log.e(TAG, "setTvOnline error: " + err.getMessage());
-            });
+        com.google.firebase.database.DatabaseReference ref =
+            db.getReference("settings/tvStatus/" + tvNum);
+
+        // onDisconnect — otomatis set online:false saat koneksi TV terputus mendadak
+        // (TV mati, uninstall, internet putus, dsb)
+        ref.child("online").onDisconnect().setValue(false);
+        ref.child("lastSeen").onDisconnect().setValue(
+            com.google.firebase.database.ServerValue.TIMESTAMP);
+
+        // Set nilai sekarang
+        java.util.Map<String, Object> updates = new java.util.HashMap<>();
+        updates.put("online",   online);
+        updates.put("lastSeen", com.google.firebase.database.ServerValue.TIMESTAMP);
+        ref.updateChildren(updates, (err, r) -> {
+            if (err != null) Log.e(TAG, "setTvOnline error: " + err.getMessage());
+        });
     }
 
     public void setActiveSession(int tvNum, boolean active) {
