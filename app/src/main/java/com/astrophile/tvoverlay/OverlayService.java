@@ -148,6 +148,7 @@ public class OverlayService extends Service {
         Log.d(TAG, "onDestroy()");
 
         timerManager.destroyAll();
+        stopWidgetCountDown();
         firebaseManager.destroyAll();
         webViewManager.destroyAll();
         audioManager.destroy();
@@ -198,6 +199,7 @@ public class OverlayService extends Service {
         sessionManager.setListener(new SessionManager.SessionListener() {
             @Override public void onSessionStarted() {
                 mainHandler.post(() -> {
+                    stopWidgetCountDown();
                     webViewManager.destroyAll();
                     isShowingTimeOverlay = false;
                     firebaseManager.clearTvControlCmd(tvNum);
@@ -360,76 +362,102 @@ public class OverlayService extends Service {
 
     // =========================================================
     // WIDGET
-    // =========================================================
 
-    private void updateWidget() {
-        if (!sessionManager.isActive() || sessionManager.getStartTime() == 0) return;
-        if (sessionManager.isBilling()) { widgetView.setVisibility(View.GONE); return; }
+    // ── CountDownTimer native — lebih reliable dari ticker untuk UI overlay ──
+    private android.os.CountDownTimer widgetCountDown = null;
 
-        long secs = sessionManager.getRemainingSeconds();
+    private void startWidgetCountDown(long sisaMs) {
+        stopWidgetCountDown();
+        if (sisaMs <= 0) return;
 
-        if (sessionManager.isPaused()) {
-            TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
-            TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
-            if (tvTime  != null) tvTime.setText(formatTime(secs));
-            if (tvLabel != null) tvLabel.setText("⏸ DIJEDA");
-            widgetView.setVisibility(secs <= 300 ? View.VISIBLE : View.GONE);
-            return;
+        widgetCountDown = new android.os.CountDownTimer(sisaMs, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                renderWidget(millisUntilFinished / 1000);
+            }
+            @Override
+            public void onFinish() {
+                renderWidget(0);
+                widgetView.setVisibility(View.GONE);
+                sessionManager.markExpired();
+                try {
+                    com.google.firebase.database.FirebaseDatabase db =
+                        com.google.firebase.database.FirebaseDatabase.getInstance();
+                    db.getReference("settings/activeSessions/" + tvNum + "/expired").setValue(true);
+                    db.getReference("settings/activeSessions/" + tvNum + "/active").setValue(true);
+                } catch (Exception e) { Log.e(TAG, "setExpired: " + e.getMessage()); }
+            }
+        }.start();
+        Log.d(TAG, "startWidgetCountDown sisaMs=" + sisaMs);
+    }
+
+    private void stopWidgetCountDown() {
+        if (widgetCountDown != null) {
+            widgetCountDown.cancel();
+            widgetCountDown = null;
         }
+    }
 
+    private void renderWidget(long secs) {
+        if (widgetView == null) return;
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
-        if (tvTime != null) {
-            tvTime.setText(formatTime(secs));
-            tvTime.invalidate();
-        }
-        // Force WindowManager refresh agar perubahan teks tampil di overlay
-        try {
-            if (widgetParams != null) windowManager.updateViewLayout(widgetView, widgetParams);
-        } catch (Exception ignored) {}
 
-        if (secs <= 0) {
-            widgetView.setVisibility(View.GONE);
-            sessionManager.markExpired();
-            try {
-                // Tulis expired:true + active:true agar kasir tahu sesi habis (v1.9 behaviour)
-                com.google.firebase.database.FirebaseDatabase db =
-                    com.google.firebase.database.FirebaseDatabase.getInstance();
-                db.getReference("settings/activeSessions/" + tvNum + "/expired").setValue(true);
-                db.getReference("settings/activeSessions/" + tvNum + "/active").setValue(true);
-            } catch (Exception e) { Log.e(TAG, "setExpired: " + e.getMessage()); }
-            return;
-        }
+        if (tvTime != null) tvTime.setText(formatTime(secs));
 
         if (secs <= 60) {
             widgetView.setVisibility(View.VISIBLE);
             if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
             if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
             if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
-            if (!sessionManager.isToast1Shown()) {
-                sessionManager.setToast1Shown(true);
-                speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
-            }
         } else if (secs <= 300) {
-            if (!sessionManager.isToast5Shown()) {
-                sessionManager.setToast5Shown(true);
-                widgetView.setVisibility(View.VISIBLE);
-                if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
-                if (tvLabel != null) tvLabel.setText("SISA WAKTU");
-                if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
-                speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
-                mainHandler.postDelayed(() -> {
-                    if (sessionManager.getRemainingSeconds() > 60)
-                        widgetView.setVisibility(View.GONE);
-                }, 10_000);
-            }
+            widgetView.setVisibility(View.VISIBLE);
+            if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
+            if (tvLabel != null) tvLabel.setText("SISA WAKTU");
+            if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
         } else {
             widgetView.setVisibility(View.GONE);
         }
+
+        // Force WindowManager refresh
+        try {
+            if (widgetParams != null) windowManager.updateViewLayout(widgetView, widgetParams);
+        } catch (Exception ignored) {}
     }
 
-    // =========================================================
+    private void updateWidget() {
+        if (!sessionManager.isActive() || sessionManager.getStartTime() == 0) return;
+        if (sessionManager.isBilling()) {
+            widgetView.setVisibility(View.GONE);
+            stopWidgetCountDown();
+            return;
+        }
+
+        long secs = sessionManager.getRemainingSeconds();
+
+        if (sessionManager.isPaused()) {
+            stopWidgetCountDown();
+            renderWidget(secs);
+            return;
+        }
+
+        // Hanya start CountDownTimer baru jika belum jalan atau selisih > 3 detik (resync)
+        if (widgetCountDown == null) {
+            long sisaMs = secs * 1000L;
+            // TTS warnings
+            if (secs <= 60 && !sessionManager.isToast1Shown()) {
+                sessionManager.setToast1Shown(true);
+                speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
+            } else if (secs <= 300 && secs > 60 && !sessionManager.isToast5Shown()) {
+                sessionManager.setToast5Shown(true);
+                speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
+            }
+            startWidgetCountDown(sisaMs);
+        }
+    }
+
+        // =========================================================
     // EXPIRED OVERLAY
     // =========================================================
 
@@ -515,6 +543,7 @@ public class OverlayService extends Service {
 
     private void hideAll() {
         Log.d(TAG, "hideAll()");
+        stopWidgetCountDown();
         if (widgetView  != null) widgetView.setVisibility(View.GONE);
         if (toastView   != null) toastView.setVisibility(View.GONE);
         if (expiredView != null) expiredView.setVisibility(View.GONE);
