@@ -421,8 +421,9 @@ public class OverlayService extends Service {
         } else {
             widgetView.setVisibility(View.GONE);
         }
-        // Paksa redraw — overlay Service tidak selalu auto-invalidate seperti Activity
-        widgetView.postInvalidate();
+        // Force WindowManager redraw — postInvalidate tidak cukup untuk overlay dari Service
+        try { windowManager.updateViewLayout(widgetView, widgetView.getLayoutParams()); }
+        catch (Exception ignored) {}
     }
 
     // =========================================================
@@ -720,8 +721,8 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, PixelFormat.TRANSLUCENT);
         wp.gravity = Gravity.BOTTOM | Gravity.END; wp.x = 24; wp.y = 24;
 
-        // Hardware acceleration wajib agar setText() tiap detik langsung ter-render di overlay
-        widgetView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        // LAYER_TYPE_NONE — biarkan sistem handle rendering, HARDWARE justru cache layer & freeze teks
+        widgetView.setLayerType(View.LAYER_TYPE_NONE, null);
 
         WindowManager.LayoutParams tp = new WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
