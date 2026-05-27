@@ -605,16 +605,16 @@ public class OverlayService extends Service {
         isShowingTimeOverlay = true;
         final String modeVal   = sessionManager.getMode() != null ? sessionManager.getMode() : "countdown";
         final boolean isPaused = sessionManager.isPaused();
-        final long startTime   = sessionManager.getStartTime();
         final long duration    = sessionManager.getDuration();
-        // Gunakan server time agar sinkron dengan kasir (kasir pakai Firebase timestamp)
-        final long effNow  = isPaused ? sessionManager.getPausedAt() : firebaseManager.getServerNow();
-        final long snapMs  = firebaseManager.getServerNow(); // snapshot waktu server
+        // Gunakan sessionManager sebagai single source of truth — sama persis dengan widget pojok kanan
         final long totalSec, sisaMs;
         if ("billing".equals(modeVal)) {
-            totalSec = 0; sisaMs = effNow - startTime;
+            totalSec = 0;
+            sisaMs   = sessionManager.getElapsedSeconds() * 1000L;
         } else {
-            totalSec = duration; sisaMs = Math.max(0, duration * 1000L - (effNow - startTime));
+            totalSec = duration;
+            // getRemainingSeconds() sudah pakai serverTimeOffset yang sama dengan widget
+            sisaMs   = Math.max(0, sessionManager.getRemainingSeconds() * 1000L);
         }
         mainHandler.post(new Runnable() {
             @Override public void run() {
