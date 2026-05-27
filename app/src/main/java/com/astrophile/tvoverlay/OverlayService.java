@@ -53,6 +53,7 @@ public class OverlayService extends Service {
 
     // UI views (XML layout — bukan WebView)
     private View widgetView;
+    private WindowManager.LayoutParams widgetParams; // simpan params untuk updateViewLayout
     private View expiredView;
     private View toastView;
 
@@ -339,8 +340,9 @@ public class OverlayService extends Service {
 
     private void startTicker() {
         timerManager.startTicker(() -> {
+            // onTick sudah di-post ke mainHandler oleh TimerManager — langsung update
             if (!sessionManager.isActive() || sessionManager.isExpired()) return;
-            mainHandler.post(() -> { if (!sessionManager.isExpired()) updateWidget(); });
+            updateWidget();
             if (sessionManager.getStartTime() == 0) {
                 Log.w(TAG, "active but startTime=0 — force re-fetch");
                 firebaseManager.listenSession(tvNum, new FirebaseManager.SessionDataCallback() {
@@ -378,7 +380,14 @@ public class OverlayService extends Service {
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
-        if (tvTime != null) tvTime.setText(formatTime(secs));
+        if (tvTime != null) {
+            tvTime.setText(formatTime(secs));
+            tvTime.invalidate();
+        }
+        // Force WindowManager refresh agar perubahan teks tampil di overlay
+        try {
+            if (widgetParams != null) windowManager.updateViewLayout(widgetView, widgetParams);
+        } catch (Exception ignored) {}
 
         if (secs <= 0) {
             widgetView.setVisibility(View.GONE);
@@ -720,6 +729,7 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT);
         tp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL; tp.y = 32;
 
+        widgetParams = wp;
         safeAddView(widgetView,  wp, "widgetView");
         safeAddView(toastView,   tp, "toastView");
         safeAddView(expiredView, makeFullscreenParams(PixelFormat.TRANSLUCENT), "expiredView");
