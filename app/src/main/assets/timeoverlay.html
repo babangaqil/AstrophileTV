@@ -88,8 +88,8 @@ var totalSec = parseFloat(getParam('totalSec')||'0');
 var isPaused = getParam('paused')==='1';
 var sisaSec  = parseFloat(getParam('sisaSec')||'0');
 
-// Tampilkan nilai debug — untuk verifikasi nilai yang diterima dari Java
-document.getElementById('debugLabel').textContent = 'sisaSec='+sisaSec+' mode='+mode+' paused='+isPaused;
+// Debug label disembunyikan di production
+document.getElementById('debugLabel').textContent = '';
 
 document.getElementById('modeLabel').textContent = isPaused ? '⏸ DIJEDA' : (mode==='countdown' ? 'SISA WAKTU' : 'DURASI MAIN');
 document.getElementById('subLabel').textContent  = 'TV '+tvNum;
