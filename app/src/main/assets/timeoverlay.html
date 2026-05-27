@@ -30,6 +30,8 @@ body{background:transparent;display:flex;align-items:flex-start;justify-content:
   display:block;
 }
 .sub-label{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,0.25);text-align:center;}
+/* DEBUG label */
+.debug-label{font-size:9px;color:rgba(255,200,0,0.7);text-align:center;padding:2px 0;}
 .progress-wrap{width:80%;height:2px;background:rgba(255,255,255,0.07);border-radius:100px;margin-top:8px;overflow:hidden;}
 .progress-fill{height:100%;border-radius:100px;transition:width 1s linear;}
 @keyframes blink{from{opacity:1;}to{opacity:0.3;}}
@@ -41,6 +43,7 @@ body{background:transparent;display:flex;align-items:flex-start;justify-content:
   <div class="mode-label" id="modeLabel">SISA WAKTU</div>
   <div class="time-display" id="timeDisplay">--:--</div>
   <div class="sub-label" id="subLabel">TV 1</div>
+  <div class="debug-label" id="debugLabel"></div>
   <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:100%;"></div></div>
 </div>
 <script>
@@ -83,16 +86,15 @@ var mode     = getParam('mode')||'countdown';
 var tvNum    = getParam('tvNum')||'1';
 var totalSec = parseFloat(getParam('totalSec')||'0');
 var isPaused = getParam('paused')==='1';
-
-// sisaSec = sisa detik SAAT Java kirim URL (sudah dihitung akurat dari server time)
-// startMs = Date.now() di JS saat overlay mulai — dipakai sebagai anchor countdown lokal
 var sisaSec  = parseFloat(getParam('sisaSec')||'0');
+
+// Tampilkan nilai debug — untuk verifikasi nilai yang diterima dari Java
+document.getElementById('debugLabel').textContent = 'sisaSec='+sisaSec+' mode='+mode+' paused='+isPaused;
 
 document.getElementById('modeLabel').textContent = isPaused ? '⏸ DIJEDA' : (mode==='countdown' ? 'SISA WAKTU' : 'DURASI MAIN');
 document.getElementById('subLabel').textContent  = 'TV '+tvNum;
 
 function startTimer(){
-  // startMs diambil SEKARANG di JS — jadi elapsed selalu akurat dari titik ini
   var startMs = Date.now();
 
   function getSisa(){
@@ -114,13 +116,11 @@ function startTimer(){
   render();
   setInterval(render, 1000);
 
-  // Fade out sebelum Java destroy WebView (Java destroy di 5500ms)
   setTimeout(function(){
     document.getElementById('card').classList.add('hiding');
   }, 4600);
 }
 
-// Tunggu font max 500ms, langsung jalan kalau sudah siap
 var _t = setTimeout(startTimer, 500);
 if(typeof document.fonts!=='undefined' && document.fonts.ready){
   document.fonts.ready.then(function(){ clearTimeout(_t); startTimer(); });
