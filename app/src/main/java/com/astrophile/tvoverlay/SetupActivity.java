@@ -174,11 +174,16 @@ public class SetupActivity extends AppCompatActivity {
         btnForceStop = findViewById(R.id.btnForceStop);
         if (btnForceStop != null) {
             btnForceStop.setOnClickListener(v -> {
-                // Stop overlay service
+                // Stop overlay service dengan bersih
                 stopService(new android.content.Intent(this, OverlayService.class));
-                // Keluar dari aplikasi sepenuhnya
-                finishAffinity();
-                android.os.Process.killProcess(android.os.Process.myPid());
+                // Tunggu service berhenti lalu restart activity fresh
+                new android.os.Handler().postDelayed(() -> {
+                    android.content.Intent restart = new android.content.Intent(this, SetupActivity.class);
+                    restart.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(restart);
+                    finish();
+                }, 800);
             });
         }
         tvUpdateInfo = findViewById(R.id.tvUpdateInfo);
@@ -460,9 +465,37 @@ public class SetupActivity extends AppCompatActivity {
 
     private void showStatus(String msg, String color) {
         if (tvStatus == null) return;
-        tvStatus.setText(msg);
-        try { tvStatus.setTextColor(android.graphics.Color.parseColor(color)); }
-        catch (Exception e) { tvStatus.setTextColor(android.graphics.Color.WHITE); }
+        boolean running = isOverlayServiceRunning();
+        String serviceLabel = running ? "\n● Monitor Aktif" : "\n○ Monitor Tidak Aktif";
+        int serviceColor    = running
+                ? android.graphics.Color.parseColor("#00ff88")
+                : android.graphics.Color.parseColor("#ff4d6d");
+
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+        // Baris 1: status utama
+        android.text.SpannableString s1 = new android.text.SpannableString(msg);
+        try { s1.setSpan(new android.text.style.ForegroundColorSpan(
+                android.graphics.Color.parseColor(color)), 0, s1.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); }
+        catch (Exception ignored) {}
+        sb.append(s1);
+        // Baris 2: status monitor
+        android.text.SpannableString s2 = new android.text.SpannableString(serviceLabel);
+        s2.setSpan(new android.text.style.ForegroundColorSpan(serviceColor), 0, s2.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.append(s2);
+        tvStatus.setText(sb);
+    }
+
+    @SuppressWarnings("deprecation")
+    private boolean isOverlayServiceRunning() {
+        android.app.ActivityManager am =
+                (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        if (am == null) return false;
+        for (android.app.ActivityManager.RunningServiceInfo svc : am.getRunningServices(50)) {
+            if (OverlayService.class.getName().equals(svc.service.getClassName())) return true;
+        }
+        return false;
     }
 
     @Override

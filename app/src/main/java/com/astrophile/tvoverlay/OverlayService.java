@@ -82,6 +82,14 @@ public class OverlayService extends Service {
     // Sleep view
     private View sleepView = null;
 
+    // Time overlay (v1.9 style — langsung inline WebView)
+    private android.webkit.WebView timeOverlayWv = null;
+
+    // Bayar overlay (v1.9 style — langsung inline WebView)
+    private android.webkit.WebView bayarOverlayWv = null;
+    private com.google.firebase.database.DatabaseReference  bayarStatusRef      = null;
+    private com.google.firebase.database.ValueEventListener bayarStatusListener = null;
+
     // =========================================================
     // LIFECYCLE
     // =========================================================
@@ -505,91 +513,155 @@ public class OverlayService extends Service {
     }
 
     // =========================================================
-    // BAYAR OVERLAY
+    // BAYAR OVERLAY (v1.9 — langsung inline WebView)
     // =========================================================
 
-    private void showBayarOverlay(String initStatus) {
-        currentBayarStatus = initStatus != null ? initStatus : "belum";
-        mainHandler.post(() -> {
-            String url = "file:///android_asset/bayaroverlay.html?bayarStatus=" + currentBayarStatus;
-            webViewManager.getOrCreateBayarOverlay(url, null);
-
-            WindowManager.LayoutParams p = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                getOverlayType(),
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            );
-            p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            p.x = 0; p.y = 4;
-            webViewManager.attachBayarOverlay(p);
+    private void showBayarOverlay(final String bayarStatusInit) {
+        currentBayarStatus = bayarStatusInit != null ? bayarStatusInit : "belum";
+        mainHandler.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (bayarOverlayWv != null) {
+                        try { windowManager.removeView(bayarOverlayWv); } catch (Exception ignored) {}
+                        bayarOverlayWv = null;
+                    }
+                    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        WindowManager.LayoutParams.WRAP_CONTENT,
+                        getOverlayType(),
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                        PixelFormat.TRANSLUCENT
+                    );
+                    p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+                    p.x = 0; p.y = 4;
+                    android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
+                    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    wv.getSettings().setJavaScriptEnabled(true);
+                    wv.loadUrl("file:///android_asset/bayaroverlay.html?bayarStatus=" + currentBayarStatus);
+                    bayarOverlayWv = wv;
+                    try { windowManager.addView(bayarOverlayWv, p); } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    Log.e(TAG, "showBayarOverlay error: " + e.getMessage());
+                }
+            }
         });
-
-        firebaseManager.listenBayarStatus(tvNum, status -> {
-            currentBayarStatus = status;
-            webViewManager.evalOnBayarOverlay("updateStatus('" + status + "')");
-        });
+        // Listen perubahan bayarStatus dari Firebase realtime
+        com.google.firebase.database.FirebaseDatabase fbDb = firebaseManager.getDb();
+        if (fbDb != null) {
+            if (bayarStatusRef != null && bayarStatusListener != null) {
+                bayarStatusRef.removeEventListener(bayarStatusListener);
+            }
+            bayarStatusRef = fbDb.getReference("settings/activeSessions/" + tvNum + "/bayarStatusOverlay");
+            bayarStatusListener = new com.google.firebase.database.ValueEventListener() {
+                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
+                    final String status = snap.exists() && snap.getValue() != null
+                            ? snap.getValue(String.class) : "belum";
+                    currentBayarStatus = status;
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            if (bayarOverlayWv != null) {
+                                bayarOverlayWv.evaluateJavascript("updateStatus('" + status + "')", null);
+                            }
+                        }
+                    });
+                }
+                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
+            };
+            bayarStatusRef.addValueEventListener(bayarStatusListener);
+        }
     }
 
     private void hideBayarOverlay() {
-        firebaseManager.removeBayarStatusListener();
-        mainHandler.post(() -> webViewManager.destroyBayarOverlay());
+        if (bayarStatusRef != null && bayarStatusListener != null) {
+            bayarStatusRef.removeEventListener(bayarStatusListener);
+            bayarStatusListener = null;
+            bayarStatusRef = null;
+        }
+        mainHandler.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (bayarOverlayWv != null) {
+                        windowManager.removeView(bayarOverlayWv);
+                        bayarOverlayWv = null;
+                    }
+                } catch (Exception ignored) {}
+            }
+        });
     }
 
     // =========================================================
-    // TIME OVERLAY
+    // TIME OVERLAY (v1.9 — langsung inline WebView)
     // =========================================================
 
     private void showTimeOverlay() {
         if (isShowingTimeOverlay) return;
         isShowingTimeOverlay = true;
-
-        String  mode      = sessionManager.getMode();
-        boolean isPaused  = sessionManager.isPaused();
-        long    startTime = sessionManager.getStartTime();
-        long    duration  = sessionManager.getDuration();
-        long    effNow    = isPaused ? sessionManager.getPausedAt() : System.currentTimeMillis();
-
-        long totalSec, sisaSec;
-        if ("billing".equals(mode)) {
+        final String modeVal   = sessionManager.getMode() != null ? sessionManager.getMode() : "countdown";
+        final boolean isPaused = sessionManager.isPaused();
+        final long startTime   = sessionManager.getStartTime();
+        final long duration    = sessionManager.getDuration();
+        final long effNow      = isPaused ? sessionManager.getPausedAt() : System.currentTimeMillis();
+        final long totalSec, sisaSec;
+        if ("billing".equals(modeVal)) {
             totalSec = 0; sisaSec = (effNow - startTime) / 1000;
         } else {
             totalSec = duration; sisaSec = Math.max(0, duration - (effNow - startTime) / 1000);
         }
-
-        mainHandler.post(() -> {
-            long safeStart = startTime > 0 ? startTime : System.currentTimeMillis();
-            String url = "file:///android_asset/timeoverlay.html"
-                + "?mode="        + android.net.Uri.encode(mode != null ? mode : "countdown")
-                + "&tvNum="       + tvNum
-                + "&totalSec="    + Math.max(0, totalSec)
-                + "&sisaSec="     + Math.max(0, sisaSec)
-                + "&fbStartTime=" + safeStart
-                + "&loadMs="      + System.currentTimeMillis()
-                + "&paused="      + (isPaused ? "1" : "0");
-
-            webViewManager.getOrCreateTimeOverlay(url, null);
-
-            WindowManager.LayoutParams p = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                getOverlayType(),
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            );
-            p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-            p.y = 0;
-            webViewManager.attachTimeOverlay(p);
-
-            mainHandler.postDelayed(() -> {
-                webViewManager.destroyTimeOverlay();
-                isShowingTimeOverlay = false;
-            }, 5500);
+        mainHandler.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    if (timeOverlayWv != null) {
+                        try { windowManager.removeView(timeOverlayWv); } catch (Exception ignored) {}
+                        try { timeOverlayWv.destroy(); } catch (Exception ignored) {}
+                        timeOverlayWv = null;
+                    }
+                    try { Thread.sleep(50); } catch (Exception ignored) {}
+                    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        WindowManager.LayoutParams.WRAP_CONTENT,
+                        getOverlayType(),
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                        PixelFormat.TRANSLUCENT
+                    );
+                    p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                    p.y = 0;
+                    android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
+                    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    wv.getSettings().setJavaScriptEnabled(true);
+                    wv.getSettings().setDomStorageEnabled(true);
+                    long safeStart = startTime > 0 ? startTime : System.currentTimeMillis();
+                    String url = "file:///android_asset/timeoverlay.html"
+                        + "?mode="        + android.net.Uri.encode(modeVal)
+                        + "&tvNum="       + tvNum
+                        + "&totalSec="    + Math.max(0, totalSec)
+                        + "&sisaSec="     + Math.max(0, sisaSec)
+                        + "&fbStartTime=" + safeStart
+                        + "&loadMs="      + System.currentTimeMillis()
+                        + "&paused="      + (isPaused ? "1" : "0");
+                    wv.loadUrl(url);
+                    timeOverlayWv = wv;
+                    try { windowManager.addView(timeOverlayWv, p); } catch (Exception ignored) {}
+                    mainHandler.postDelayed(new Runnable() {
+                        @Override public void run() {
+                            try {
+                                if (timeOverlayWv != null) {
+                                    windowManager.removeView(timeOverlayWv);
+                                    timeOverlayWv.destroy();
+                                    timeOverlayWv = null;
+                                }
+                            } catch (Exception ignored) {}
+                            isShowingTimeOverlay = false;
+                        }
+                    }, 5500);
+                } catch (Exception e) {
+                    Log.e(TAG, "showTimeOverlay error: " + e.getMessage());
+                    isShowingTimeOverlay = false;
+                }
+            }
         });
     }
 

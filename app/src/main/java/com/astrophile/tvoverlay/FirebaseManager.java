@@ -329,6 +329,8 @@ public class FirebaseManager {
             });
     }
 
+    public com.google.firebase.database.FirebaseDatabase getDb() { return db; }
+
     public void clearTvControlCmd(int tvNum) {
         if (db == null) return;
         db.getReference("settings/tvControl/" + tvNum + "/cmd")
