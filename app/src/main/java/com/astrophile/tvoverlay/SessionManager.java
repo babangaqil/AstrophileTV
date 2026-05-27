@@ -164,8 +164,8 @@ public class SessionManager {
      */
     public void applyFromLocal(boolean active, boolean fbExpired, String mode,
                                 long start, long duration, long pausedAt, String namaP) {
-        // Delegasi ke applyFromFirebase — logic identik
-        applyFromFirebase(active, fbExpired, mode, start, duration, pausedAt, namaP);
+        // Delegasi ke applyFromFirebase — urutan parameter: active,expired,mode,start,duration,nama,pausedAt
+        applyFromFirebase(active, fbExpired, mode, start, duration, namaP, pausedAt);
     }
 
 }

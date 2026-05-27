@@ -53,6 +53,7 @@ public class OverlayService extends Service {
     private WebViewManager    webViewManager;
     private TimerManager      timerManager;
     private AstroAudioManager audioManager;
+    private LocalHttpServer   localHttpServer;
 
     // UI views (XML layout — bukan WebView)
     private View widgetView;
