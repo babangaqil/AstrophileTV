@@ -199,6 +199,9 @@ public class OverlayService extends Service {
         sessionManager.setListener(new SessionManager.SessionListener() {
             @Override public void onSessionStarted() {
                 mainHandler.post(() -> {
+                    // Jangan lakukan apapun kalau expired overlay sedang tampil
+                    // (cegah race condition Firebase snapshot fire ulang sebelum expired=true)
+                    if (sessionManager.isExpired()) return;
                     stopWidgetCountDown();
                     webViewManager.destroyAll();
                     isShowingTimeOverlay = false;

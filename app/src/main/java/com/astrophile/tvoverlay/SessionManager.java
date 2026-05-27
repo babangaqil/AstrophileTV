@@ -97,7 +97,9 @@ public class SessionManager {
             if (fbExpired) {
                 // Firebase sudah expired — langsung trigger overlay tanpa tunggu countdown
                 listener.onSessionExpired();
-            } else {
+            } else if (!this.expired) {
+                // Jangan trigger onSessionStarted kalau sudah expired secara lokal
+                // (mencegah race condition Firebase fire ulang snapshot sebelum expired=true)
                 listener.onSessionStarted();
             }
         }
