@@ -61,6 +61,10 @@ public class SessionManager {
             boolean fbActive, boolean fbExpired, String fbMode,
             long fbStart, long fbDuration, String fbNama, long fbPausedAt) {
 
+        // Simpan state sebelumnya untuk menentukan apakah ini sesi BARU atau update rutin
+        boolean wasActive = this.active;
+        long    wasStart  = this.startTime;
+
         this.active        = fbActive;
         this.expired       = fbExpired;
         this.mode          = fbMode   != null ? fbMode   : "";
@@ -76,9 +80,15 @@ public class SessionManager {
             if (fbExpired) {
                 // Firebase sudah expired — langsung trigger overlay tanpa tunggu countdown
                 listener.onSessionExpired();
-            } else {
+            } else if (!wasActive || wasStart != fbStart) {
+                // Hanya trigger onSessionStarted jika ini benar-benar sesi BARU
+                // (sebelumnya tidak aktif, atau startTime berubah = sesi berbeda)
+                // Update rutin Firebase (bayarStatus, pausedAt, dll) tidak trigger ini
+                toast5Shown = false;
+                toast1Shown = false;
                 listener.onSessionStarted();
             }
+            // Update rutin saat sesi sudah berjalan — tidak perlu restart apapun
         }
     }
 
