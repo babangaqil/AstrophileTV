@@ -1,4 +1,3 @@
-
 package com.astrophile.tvoverlay;
 
 import android.app.Notification;
@@ -200,6 +199,8 @@ public class OverlayService extends Service {
                     webViewManager.destroyAll();
                     isShowingTimeOverlay = false;
                     firebaseManager.clearTvControlCmd(tvNum);
+                    // Auto wake saat sesi mulai — kalau layar sedang sleep, langsung gelap dihilangkan
+                    if (sleepView != null) hideSleep();
                     // Tulis balik active:true ke Firebase agar kasir tahu TV aktif (seperti v1.9)
                     firebaseManager.setActiveSession(tvNum, true);
                     firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
