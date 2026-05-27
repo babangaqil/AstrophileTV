@@ -394,6 +394,7 @@ public class OverlayService extends Service {
         }
 
         if (secs <= 60) {
+            // Selalu VISIBLE + update warna tiap tick — widget mungkin GONE dari postDelayed 5-menit
             widgetView.setVisibility(View.VISIBLE);
             if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
             if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
@@ -403,6 +404,7 @@ public class OverlayService extends Service {
                 speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
             }
         } else if (secs <= 300) {
+            // Teks waktu sudah di-set di atas tiap tick — hanya urus visibility & one-time toast
             if (!sessionManager.isToast5Shown()) {
                 sessionManager.setToast5Shown(true);
                 widgetView.setVisibility(View.VISIBLE);
@@ -411,6 +413,7 @@ public class OverlayService extends Service {
                 if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
                 speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
                 mainHandler.postDelayed(() -> {
+                    // Sembunyikan hanya jika masih di range 5 menit — jangan sembunyikan saat sudah ≤ 1 menit
                     if (sessionManager.getRemainingSeconds() > 60)
                         widgetView.setVisibility(View.GONE);
                 }, 10_000);
