@@ -54,6 +54,7 @@ public class OverlayService extends Service {
     private TimerManager      timerManager;
     private AstroAudioManager audioManager;
     private LocalHttpServer   localHttpServer;
+    private java.util.Timer    heartbeatTimer;
 
     // UI views (XML layout — bukan WebView)
     private View widgetView;
@@ -154,6 +155,7 @@ public class OverlayService extends Service {
         timerManager.destroyAll();
         stopWidgetCountDown();
         // Set offline sebelum destroy — untuk kasus stop/uninstall normal
+        stopHeartbeat();
         try { firebaseManager.setTvOnline(tvNum, false); } catch (Exception ignored) {}
         firebaseManager.destroyAll();
         if (localHttpServer != null) localHttpServer.stop();
@@ -261,6 +263,7 @@ public class OverlayService extends Service {
         checkLicensePeriodic();
 
         firebaseManager.setTvOnline(tvNum, true);
+        startHeartbeat();
         try {
             com.google.firebase.database.FirebaseDatabase.getInstance()
                 .getReference("settings/tvStatus/" + tvNum + "/online")
@@ -1064,6 +1067,30 @@ public class OverlayService extends Service {
             }
         } catch (Exception e) { Log.e("OverlayService", "getLocalIpAddress: " + e); }
         return "0.0.0.0";
+    }
+
+
+    // ── Heartbeat — update lastSeen tiap 60 detik agar kasir tahu TV masih hidup ──
+    private void startHeartbeat() {
+        stopHeartbeat();
+        heartbeatTimer = new java.util.Timer("heartbeat", true);
+        heartbeatTimer.scheduleAtFixedRate(new java.util.TimerTask() {
+            @Override public void run() {
+                try {
+                    firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
+                } catch (Exception e) {
+                    Log.w(TAG, "heartbeat error: " + e.getMessage());
+                }
+            }
+        }, 60_000L, 60_000L);
+        Log.d(TAG, "Heartbeat started");
+    }
+
+    private void stopHeartbeat() {
+        if (heartbeatTimer != null) {
+            heartbeatTimer.cancel();
+            heartbeatTimer = null;
+        }
     }
 
 }
