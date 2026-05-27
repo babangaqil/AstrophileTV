@@ -536,6 +536,7 @@ public class OverlayService extends Service {
         if (toastView   != null) toastView.setVisibility(View.GONE);
         if (expiredView != null) expiredView.setVisibility(View.GONE);
 
+        hideBayarOverlay();          // FIX: pastikan bayarOverlayWv di-remove dari WindowManager
         webViewManager.destroyAll();
         isShowingTimeOverlay = false;
         firebaseManager.removeBayarStatusListener();
@@ -990,4 +991,3 @@ public class OverlayService extends Service {
                      : String.format(Locale.US,"%02d:%02d",m,s);
     }
 }
-
