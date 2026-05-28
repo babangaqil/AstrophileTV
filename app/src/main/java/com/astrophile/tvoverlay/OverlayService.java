@@ -1054,7 +1054,7 @@ public class OverlayService extends Service {
     // ── Handle perintah dari kasir via HTTP LAN (mode offline) ────────────────
     private void handleLocalCommand(JSONObject p) {
         try {
-            // Cek apakah ini perintah setMode
+            // ── 1. Cek apakah ini perintah setMode ──
             String action = p.optString("_action", "");
             if ("setMode".equals(action)) {
                 String connMode = p.optString("mode", "online");
@@ -1062,7 +1062,36 @@ public class OverlayService extends Service {
                 return;
             }
 
-            // Payload sama persis dengan struktur Firebase activeSessions
+            // ── 2. Cek apakah ini TV control command (sleep/wake/showtime/dll) ──
+            // Kasir kirim { _cmd: "sleep", updatedAt: ... } via LAN saat mode offline
+            String tvCmd = p.optString("_cmd", "");
+            if (!tvCmd.isEmpty()) {
+                Log.d(TAG, "handleLocalCommand _cmd=" + tvCmd);
+                switch (tvCmd) {
+                    case "sleep":
+                        showSleep();
+                        break;
+                    case "wake":
+                        hideSleep();
+                        break;
+                    case "showtime":
+                        showTimeOverlay();
+                        break;
+                    case "showbayar":
+                        String bs = p.optString("bayarStatus", currentBayarStatus);
+                        showBayarOverlay(bs != null ? bs : "belum");
+                        break;
+                    case "hidebayar":
+                        hideBayarOverlay();
+                        break;
+                    default:
+                        Log.w(TAG, "handleLocalCommand: unknown _cmd=" + tvCmd);
+                }
+                return;
+            }
+
+            // ── 3. Payload sesi (billing/countdown) ──
+            // Sama persis dengan struktur Firebase activeSessions
             boolean active   = p.optBoolean("active", false);
             boolean expired  = p.optBoolean("expired", false);
             String  mode     = p.optString("mode", "countdown");
