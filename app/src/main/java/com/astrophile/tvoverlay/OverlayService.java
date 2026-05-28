@@ -53,8 +53,9 @@ public class OverlayService extends Service {
     private WebViewManager    webViewManager;
     private TimerManager      timerManager;
     private AstroAudioManager audioManager;
-    private LocalHttpServer   localHttpServer;
-    private java.util.Timer    heartbeatTimer;
+    private LocalHttpServer              localHttpServer;
+    private java.util.Timer              heartbeatTimer;
+    private android.content.BroadcastReceiver modeReceiver;
 
     // UI views (XML layout — bukan WebView)
     private View widgetView;
@@ -157,6 +158,7 @@ public class OverlayService extends Service {
         // Set offline sebelum destroy — untuk kasus stop/uninstall normal
         stopHeartbeat();
         try { firebaseManager.setTvOnline(tvNum, false); } catch (Exception ignored) {}
+        try { if (modeReceiver != null) unregisterReceiver(modeReceiver); } catch (Exception ignored) {}
         firebaseManager.destroyAll();
         if (localHttpServer != null) localHttpServer.stop();
         webViewManager.destroyAll();
@@ -201,6 +203,30 @@ public class OverlayService extends Service {
         sessionManager  = new SessionManager();
         firebaseManager = new FirebaseManager(this);
         sessionManager.setFirebaseManager(firebaseManager); // single source of truth server time
+        // Register receiver untuk toggle Online/Offline dari SetupActivity
+        modeReceiver = new android.content.BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context ctx, android.content.Intent intent) {
+                boolean offline = intent.getBooleanExtra("offline", false);
+                handleSetMode(offline ? "offline" : "online");
+                Log.i(TAG, "modeReceiver: offline=" + offline);
+            }
+        };
+        android.content.IntentFilter filter = new android.content.IntentFilter("com.astrophile.SET_MODE");
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(modeReceiver, filter, RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(modeReceiver, filter);
+        }
+
+        // Terapkan mode tersimpan saat service start
+        android.content.SharedPreferences prefs = getSharedPreferences("astro_prefs", MODE_PRIVATE);
+        boolean savedOffline = prefs.getBoolean("offline_mode", false);
+        if (savedOffline) {
+            mainHandler.postDelayed(() -> handleSetMode("offline"), 2000);
+            Log.i(TAG, "Restored offline mode from prefs");
+        }
+
         // Jalankan HTTP server untuk mode offline (LAN)
         try {
             localHttpServer = new LocalHttpServer(payload -> {
@@ -1028,6 +1054,14 @@ public class OverlayService extends Service {
     // ── Handle perintah dari kasir via HTTP LAN (mode offline) ────────────────
     private void handleLocalCommand(JSONObject p) {
         try {
+            // Cek apakah ini perintah setMode
+            String action = p.optString("_action", "");
+            if ("setMode".equals(action)) {
+                String connMode = p.optString("mode", "online");
+                handleSetMode(connMode);
+                return;
+            }
+
             // Payload sama persis dengan struktur Firebase activeSessions
             boolean active   = p.optBoolean("active", false);
             boolean expired  = p.optBoolean("expired", false);
@@ -1045,6 +1079,26 @@ public class OverlayService extends Service {
                 + " expired=" + expired + " start=" + start);
         } catch (Exception e) {
             Log.e(TAG, "handleLocalCommand error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Handle switch mode Online/Offline dari kasir.
+     * Offline → stop listen Firebase, hanya terima perintah dari LAN.
+     * Online  → mulai listen Firebase kembali.
+     */
+    private void handleSetMode(String mode) {
+        Log.i(TAG, "handleSetMode: " + mode);
+        if ("offline".equals(mode)) {
+            // Stop Firebase session listener — cegah override data LAN
+            firebaseManager.removeSessionListener();
+            Log.i(TAG, "Mode OFFLINE — Firebase listener dimatikan");
+        } else {
+            // Restart Firebase session listener
+            firebaseManager.listenSession(tvNum, snap -> {
+                mainHandler.post(() -> handleFirebaseData(snap));
+            });
+            Log.i(TAG, "Mode ONLINE — Firebase listener dinyalakan kembali");
         }
     }
 
