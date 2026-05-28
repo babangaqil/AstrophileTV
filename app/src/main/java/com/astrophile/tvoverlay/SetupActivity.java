@@ -30,7 +30,6 @@ public class SetupActivity extends AppCompatActivity {
 
     private EditText etLicenseKey;
     private Button btnActivate;
-    private static final String PREFS_NAME = "astro_prefs";
     private static final String KEY_OFFLINE = "offline_mode";
     private TextView tvLicenseStatus;
     private EditText etTvNum, etTvName;
@@ -165,8 +164,9 @@ public class SetupActivity extends AppCompatActivity {
             tvIpInfo.setVisibility(View.VISIBLE);
         }
 
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+
         // ── Toggle Online / Offline ───────────────────────────────────────
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean isOffline = prefs.getBoolean(KEY_OFFLINE, false);
 
         SwitchCompat switchOffline = findViewById(R.id.switchOfflineMode);
@@ -188,8 +188,6 @@ public class SetupActivity extends AppCompatActivity {
                     android.widget.Toast.LENGTH_SHORT).show();
             });
         }
-
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
         etTvName.setText(prefs.getString("tvName", ""));
 
