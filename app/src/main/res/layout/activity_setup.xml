@@ -153,6 +153,35 @@
             android:layout_marginBottom="8dp"
             android:visibility="gone"/>
 
+        <!-- Toggle Online / Offline -->
+        <LinearLayout
+            android:id="@+id/layoutModeToggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="#0a1020"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:id="@+id/tvModeLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="13sp"
+                android:textColor="#00f5ff"
+                android:fontFamily="monospace"
+                android:text="🌐 Mode Online (Firebase)"/>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchOfflineMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"/>
+
+        </LinearLayout>
+
         <TextView
             android:id="@+id/tvDeviceInfo"
             android:layout_width="match_parent"
