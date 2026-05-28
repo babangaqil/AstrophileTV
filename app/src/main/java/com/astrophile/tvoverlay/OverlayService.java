@@ -220,7 +220,7 @@ public class OverlayService extends Service {
         }
 
         // Terapkan mode tersimpan saat service start
-        android.content.SharedPreferences prefs = getSharedPreferences("astro_prefs", MODE_PRIVATE);
+        android.content.SharedPreferences prefs = getSharedPreferences("astro_tv_prefs", MODE_PRIVATE);
         boolean savedOffline = prefs.getBoolean("offline_mode", false);
         if (savedOffline) {
             mainHandler.postDelayed(() -> handleSetMode("offline"), 2000);
