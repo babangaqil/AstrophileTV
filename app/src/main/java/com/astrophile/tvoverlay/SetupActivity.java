@@ -14,6 +14,8 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
+import androidx.appcompat.widget.SwitchCompat;
+import android.content.SharedPreferences;
 import android.widget.EditText;
 import android.widget.TextView;
 import androidx.activity.result.ActivityResultLauncher;
@@ -28,6 +30,8 @@ public class SetupActivity extends AppCompatActivity {
 
     private EditText etLicenseKey;
     private Button btnActivate;
+    private static final String PREFS_NAME = "astro_prefs";
+    private static final String KEY_OFFLINE = "offline_mode";
     private TextView tvLicenseStatus;
     private EditText etTvNum, etTvName;
     private Button btnConnect;
@@ -159,6 +163,30 @@ public class SetupActivity extends AppCompatActivity {
             String ip = OverlayService.getLocalIpAddress();
             tvIpInfo.setText("📡 IP TV (Offline): " + ip + ":8080");
             tvIpInfo.setVisibility(View.VISIBLE);
+        }
+
+        // ── Toggle Online / Offline ───────────────────────────────────────
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean isOffline = prefs.getBoolean(KEY_OFFLINE, false);
+
+        SwitchCompat switchOffline = findViewById(R.id.switchOfflineMode);
+        TextView      tvModeLabel  = findViewById(R.id.tvModeLabel);
+
+        if (switchOffline != null) {
+            switchOffline.setChecked(isOffline);
+            updateModeLabel(tvModeLabel, isOffline);
+
+            switchOffline.setOnCheckedChangeListener((btn, checked) -> {
+                prefs.edit().putBoolean(KEY_OFFLINE, checked).apply();
+                updateModeLabel(tvModeLabel, checked);
+                // Beritahu OverlayService via broadcast
+                android.content.Intent intent = new android.content.Intent("com.astrophile.SET_MODE");
+                intent.putExtra("offline", checked);
+                sendBroadcast(intent);
+                android.widget.Toast.makeText(this,
+                    checked ? "📡 Mode Offline aktif" : "🌐 Mode Online aktif",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            });
         }
 
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -514,4 +542,13 @@ public class SetupActivity extends AppCompatActivity {
             else showStatus("Izin ditolak.", "#ff4d6d");
         }
     }
+
+    private void updateModeLabel(android.widget.TextView tv, boolean offline) {
+        if (tv == null) return;
+        tv.setText(offline ? "📡 Mode Offline (LAN)" : "🌐 Mode Online (Firebase)");
+        tv.setTextColor(offline
+            ? android.graphics.Color.parseColor("#00ff88")
+            : android.graphics.Color.parseColor("#00f5ff"));
+    }
+
 }
