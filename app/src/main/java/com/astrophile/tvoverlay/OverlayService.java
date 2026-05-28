@@ -1095,8 +1095,13 @@ public class OverlayService extends Service {
             Log.i(TAG, "Mode OFFLINE — Firebase listener dimatikan");
         } else {
             // Restart Firebase session listener
-            firebaseManager.listenSession(tvNum, snap -> {
-                mainHandler.post(() -> handleFirebaseData(snap));
+            firebaseManager.listenSession(tvNum, new FirebaseManager.SessionDataCallback() {
+                @Override public void onData(com.google.firebase.database.DataSnapshot snap) {
+                    mainHandler.post(() -> handleFirebaseData(snap));
+                }
+                @Override public void onCancelled(String error) {
+                    Log.e(TAG, "listenSession cancelled: " + error);
+                }
             });
             Log.i(TAG, "Mode ONLINE — Firebase listener dinyalakan kembali");
         }
