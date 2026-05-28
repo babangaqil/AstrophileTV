@@ -27,10 +27,10 @@ public class SetupActivity extends AppCompatActivity {
 
     private static final int REQUEST_OVERLAY = 1001;
     private static final String PREFS = "astro_tv_prefs";
+    private static final String KEY_OFFLINE = "offline_mode";
 
     private EditText etLicenseKey;
     private Button btnActivate;
-    private static final String KEY_OFFLINE = "offline_mode";
     private TextView tvLicenseStatus;
     private EditText etTvNum, etTvName;
     private Button btnConnect;
@@ -168,18 +168,14 @@ public class SetupActivity extends AppCompatActivity {
 
         // ── Toggle Online / Offline ───────────────────────────────────────
         boolean isOffline = prefs.getBoolean(KEY_OFFLINE, false);
-
         SwitchCompat switchOffline = findViewById(R.id.switchOfflineMode);
         TextView      tvModeLabel  = findViewById(R.id.tvModeLabel);
-
         if (switchOffline != null) {
             switchOffline.setChecked(isOffline);
             updateModeLabel(tvModeLabel, isOffline);
-
             switchOffline.setOnCheckedChangeListener((btn, checked) -> {
                 prefs.edit().putBoolean(KEY_OFFLINE, checked).apply();
                 updateModeLabel(tvModeLabel, checked);
-                // Beritahu OverlayService via broadcast
                 android.content.Intent intent = new android.content.Intent("com.astrophile.SET_MODE");
                 intent.putExtra("offline", checked);
                 sendBroadcast(intent);
@@ -188,6 +184,7 @@ public class SetupActivity extends AppCompatActivity {
                     android.widget.Toast.LENGTH_SHORT).show();
             });
         }
+
         etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
         etTvName.setText(prefs.getString("tvName", ""));
 
