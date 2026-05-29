@@ -76,12 +76,6 @@ public class OverlayService extends Service {
     private boolean isShowingTimeOverlay = false;
     private String  currentBayarStatus   = "belum";
 
-    // License refs
-    private com.google.firebase.database.DatabaseReference  licenseRef      = null;
-    private com.google.firebase.database.ValueEventListener licenseListener = null;
-    private com.google.firebase.database.DatabaseReference  globalUpdateRef      = null;
-    private com.google.firebase.database.ValueEventListener globalUpdateListener = null;
-
     // TTS
     private android.speech.tts.TextToSpeech tts      = null;
     private boolean                          ttsReady = false;
@@ -160,14 +154,11 @@ public class OverlayService extends Service {
         try { firebaseManager.setTvOnline(tvNum, false); } catch (Exception ignored) {}
         try { if (modeReceiver != null) unregisterReceiver(modeReceiver); } catch (Exception ignored) {}
         firebaseManager.destroyAll();
+        if (globalUpdateRef != null && globalUpdateListener != null)
+            globalUpdateRef.removeEventListener(globalUpdateListener);
         if (localHttpServer != null) localHttpServer.stop();
         webViewManager.destroyAll();
         audioManager.destroy();
-
-        if (licenseRef != null && licenseListener != null)
-            licenseRef.removeEventListener(licenseListener);
-        if (globalUpdateRef != null && globalUpdateListener != null)
-            globalUpdateRef.removeEventListener(globalUpdateListener);
 
         if (tts != null) {
             try { tts.stop(); tts.shutdown(); }
@@ -286,10 +277,9 @@ public class OverlayService extends Service {
         attachAllFirebaseListeners();
         startTicker();
         initTTS();
-        checkLicensePeriodic();
-
         firebaseManager.setTvOnline(tvNum, true);
         startHeartbeat();
+        checkGlobalUpdate();
         try {
             com.google.firebase.database.FirebaseDatabase.getInstance()
                 .getReference("settings/tvStatus/" + tvNum + "/online")
@@ -839,61 +829,28 @@ public class OverlayService extends Service {
     }
 
     // =========================================================
-    // LICENSE
+    // UPDATE BROADCAST
     // =========================================================
 
-    private void checkLicensePeriodic() {
-        String key      = LicenseManager.getSavedKey(this);
-        String deviceId = LicenseManager.getSavedDeviceId(this);
-        if (key.isEmpty()) return;
-
-        String keyHash = LicenseManager.hashKey(key.replace("-", "").toUpperCase());
-        try {
-            com.google.firebase.FirebaseApp master = getMasterApp();
-            if (licenseRef != null && licenseListener != null)
-                licenseRef.removeEventListener(licenseListener);
-
-            licenseRef = com.google.firebase.database.FirebaseDatabase
-                .getInstance(master).getReference("tvLicenseKeys/" + keyHash);
-
-            licenseListener = new com.google.firebase.database.ValueEventListener() {
-                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
-                    if (!snap.exists()) { blockOverlay(); return; }
-                    Boolean rev  = snap.child("revoked").getValue(Boolean.class);
-                    Long    expAt = snap.child("expiredAt").getValue(Long.class);
-                    if (Boolean.TRUE.equals(rev))                                        { blockOverlay(); return; }
-                    if (expAt != null && System.currentTimeMillis() > expAt)             { blockOverlay(); return; }
-                    if (!deviceId.isEmpty()) {
-                        com.google.firebase.database.DataSnapshot dev =
-                            snap.child("devices").child(deviceId);
-                        if (dev.exists() && Boolean.TRUE.equals(dev.child("revoked").getValue(Boolean.class)))
-                            { blockOverlay(); return; }
-                    }
-                    com.google.firebase.database.DataSnapshot fu = snap.child("forceUpdate");
-                    if (Boolean.TRUE.equals(fu.child("enabled").getValue(Boolean.class))) {
-                        broadcastUpdate(
-                            fu.child("version").getValue(String.class),
-                            fu.child("url").getValue(String.class),
-                            fu.child("message").getValue(String.class));
-                        return;
-                    }
-                    checkGlobalUpdate();
-                }
-                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {
-                    Log.e(TAG, "licenseListener: " + e.getMessage());
-                }
-            };
-            licenseRef.addValueEventListener(licenseListener);
-        } catch (Exception e) { Log.e(TAG, "checkLicensePeriodic: " + e.getMessage(), e); }
-    }
+    private com.google.firebase.database.DatabaseReference  globalUpdateRef      = null;
+    private com.google.firebase.database.ValueEventListener globalUpdateListener = null;
 
     private void checkGlobalUpdate() {
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String apiKey    = prefs.getString("apiKey", "");
+        String dbUrl     = prefs.getString("dbUrl", "");
+        String projectId = prefs.getString("projectId", "");
+        if (apiKey.isEmpty() || dbUrl.isEmpty()) return;
         try {
+            com.google.firebase.FirebaseApp app;
+            try { app = com.google.firebase.FirebaseApp.getInstance("_tv_overlay"); }
+            catch (Exception e) { return; } // sudah diinit di FirebaseManager.init()
+
             if (globalUpdateRef != null && globalUpdateListener != null)
                 globalUpdateRef.removeEventListener(globalUpdateListener);
 
             globalUpdateRef = com.google.firebase.database.FirebaseDatabase
-                .getInstance(getMasterApp()).getReference("settings/globalUpdate");
+                .getInstance(app).getReference("settings/globalUpdate");
 
             globalUpdateListener = new com.google.firebase.database.ValueEventListener() {
                 @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
@@ -917,33 +874,12 @@ public class OverlayService extends Service {
         } catch (Exception e) { Log.e(TAG, "checkGlobalUpdate: " + e.getMessage(), e); }
     }
 
-    private void blockOverlay() {
-        LicenseManager.clearLicense(this);
-        stopSelf();
-        Intent i = new Intent(this, SetupActivity.class);
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(i);
-    }
-
     private void broadcastUpdate(String version, String url, String message) {
         Intent i = new Intent("com.astrophile.tvoverlay.UPDATE_AVAILABLE");
         i.putExtra("version", version != null ? version : "");
         i.putExtra("url",     url     != null ? url     : "");
         i.putExtra("message", message != null ? message : "");
         sendBroadcast(i);
-    }
-
-    private com.google.firebase.FirebaseApp getMasterApp() {
-        try { return com.google.firebase.FirebaseApp.getInstance("_tv_license"); }
-        catch (Exception e) {
-            return com.google.firebase.FirebaseApp.initializeApp(this,
-                new com.google.firebase.FirebaseOptions.Builder()
-                    .setApiKey("AIzaSyD8XffAZK8JUOBajCUVyPS-NT9jnwYBats")
-                    .setDatabaseUrl("https://astrophile-rental-default-rtdb.firebaseio.com")
-                    .setProjectId("astrophile-rental")
-                    .setApplicationId("1:789474619442:android:5f678d3b6ebdc99a1c8c2b")
-                    .build(), "_tv_license");
-        }
     }
 
     // =========================================================

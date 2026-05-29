@@ -53,9 +53,6 @@ public class FirebaseManager {
     private DatabaseReference bayarStatusRef;
     private ValueEventListener bayarStatusListener;
 
-    private DatabaseReference licenseRef;
-    private ValueEventListener licenseListener;
-
     // ── Callback interfaces ───────────────────────────────────
     public interface SessionDataCallback {
         void onData(DataSnapshot snap);
@@ -310,40 +307,6 @@ public class FirebaseManager {
         bayarStatusListener = null;
     }
 
-    // ── License revoke listener ───────────────────────────────
-    public void listenLicenseRevoke(String keyHash, String deviceId, Runnable onRevoked) {
-        if (db == null) return;
-
-        removeLicenseListener();
-
-        licenseRef = db.getReference("tvLicenseKeys/" + keyHash);
-        licenseListener = new ValueEventListener() {
-            @Override public void onDataChange(DataSnapshot snap) {
-                Boolean revoked = snap.child("revoked").getValue(Boolean.class);
-                Long expiredAt  = snap.child("expiredAt").getValue(Long.class);
-                if (Boolean.TRUE.equals(revoked)) { onRevoked.run(); return; }
-                if (expiredAt != null && System.currentTimeMillis() > expiredAt) { onRevoked.run(); return; }
-                if (!deviceId.isEmpty()) {
-                    DataSnapshot dev = snap.child("devices").child(deviceId);
-                    if (dev.exists() && Boolean.TRUE.equals(dev.child("revoked").getValue(Boolean.class))) {
-                        onRevoked.run();
-                    }
-                }
-            }
-            @Override public void onCancelled(DatabaseError e) {
-                Log.e(TAG, "licenseListener cancelled: " + e.getMessage());
-            }
-        };
-        licenseRef.addValueEventListener(licenseListener);
-    }
-
-    public void removeLicenseListener() {
-        if (licenseRef != null && licenseListener != null) {
-            licenseRef.removeEventListener(licenseListener);
-        }
-        licenseListener = null;
-    }
-
     // ── Write helpers ─────────────────────────────────────────
     public void setLastSeen(int tvNum, long timestamp) {
         if (db == null) return;
@@ -400,7 +363,6 @@ public class FirebaseManager {
         removeStoreNameListener();
         removeTvControlListener();
         removeBayarStatusListener();
-        removeLicenseListener();
         db = null;
     }
 }
