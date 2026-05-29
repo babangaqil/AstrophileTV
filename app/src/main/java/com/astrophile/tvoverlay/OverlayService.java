@@ -836,7 +836,7 @@ public class OverlayService extends Service {
     private com.google.firebase.database.ValueEventListener globalUpdateListener = null;
 
     private void checkGlobalUpdate() {
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         String apiKey    = prefs.getString("apiKey", "");
         String dbUrl     = prefs.getString("dbUrl", "");
         String projectId = prefs.getString("projectId", "");
