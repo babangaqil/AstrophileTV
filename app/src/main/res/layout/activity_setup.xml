@@ -253,6 +253,18 @@
             android:visibility="gone"/>
 
         <Button
+            android:id="@+id/btnDownloadUpdate"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="⬇  DOWNLOAD UPDATE TERBARU"
+            android:textColor="#00f5ff"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1"
+            android:backgroundTint="#0a1a2a"
+            android:layout_marginTop="12dp"/>
+
+        <Button
             android:id="@+id/btnForceStop"
             android:layout_width="match_parent"
             android:layout_height="52dp"
