@@ -342,6 +342,11 @@ public class OverlayService extends Service {
     // =========================================================
 
     private void handleLocalCommand(JSONObject p) {
+        // Broadcast ke SetupActivity bahwa kasir terhubung
+        try {
+            sendBroadcast(new Intent(SetupActivity.ACTION_KASIR_HIT));
+        } catch (Exception ignored) {}
+
         try {
             String tvCmd = p.optString("_cmd", "");
             if (!tvCmd.isEmpty()) {
