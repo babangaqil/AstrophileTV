@@ -126,6 +126,31 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- Nama Toko -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NAMA TOKO"
+                android:textSize="9sp"
+                android:textColor="#5a80a8"
+                android:letterSpacing="0.2"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="6dp"/>
+
+            <EditText
+                android:id="@+id/etNamaToko"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="ASTROPHILE"
+                android:textColorHint="#3a5070"
+                android:textColor="#e8f4ff"
+                android:textSize="14sp"
+                android:background="@drawable/input_bg"
+                android:padding="12dp"
+                android:gravity="center"
+                android:inputType="textCapCharacters"
+                android:singleLine="true"/>
+
             <!-- Connect Button -->
             <Button
                 android:id="@+id/btnConnect"
