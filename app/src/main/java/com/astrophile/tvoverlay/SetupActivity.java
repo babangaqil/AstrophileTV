@@ -72,7 +72,19 @@ public class SetupActivity extends AppCompatActivity {
         if (etNamaToko != null)
             etNamaToko.setText(prefs.getString("namaToko", ""));
 
-        btnConnect.setOnClickListener(v -> connectAndStart());
+        // Download Update button
+        Button btnDownload = findViewById(R.id.btnDownloadUpdate);
+        if (btnDownload != null) {
+            btnDownload.setOnClickListener(v -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://github.com/babangaqil/AstrophileTV/releases/latest/download/AstrophileTV.apk"));
+                    startActivity(i);
+                } catch (Exception e) {
+                    showStatus("Gagal buka browser", "#ff4d6d");
+                }
+            });
+        }
 
         // Tampilkan status service
         showStatus(isOverlayServiceRunning() ? "● Monitor Aktif" : "○ Monitor Tidak Aktif",
