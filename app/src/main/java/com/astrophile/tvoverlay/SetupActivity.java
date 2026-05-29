@@ -1,7 +1,10 @@
 package com.astrophile.tvoverlay;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -21,25 +24,41 @@ import androidx.core.content.ContextCompat;
 
 public class SetupActivity extends AppCompatActivity {
 
-    private static final int    REQUEST_OVERLAY = 1001;
-    private static final String PREFS           = "astro_tv_prefs";
+    private static final int    REQUEST_OVERLAY  = 1001;
+    private static final String PREFS            = "astro_tv_prefs";
+    private static final String UPDATE_URL       =
+        "https://github.com/babangaqil/AstrophileTV/releases/latest/download/AstrophileTV.apk";
+    public  static final String ACTION_KASIR_HIT = "com.astrophile.tvoverlay.KASIR_HIT";
 
     private EditText etTvNum, etTvName, etNamaToko;
     private Button   btnConnect;
     private TextView tvStatus;
 
+    // Polling status service
+    private final Handler  statusHandler  = new Handler(Looper.getMainLooper());
+    private final Runnable statusRunnable = this::refreshStatus;
+
+    // Receiver: kasir hit /command → broadcast dari OverlayService
+    private BroadcastReceiver kasirReceiver;
+    private long lastKasirHit = 0;
+
     private final ActivityResultLauncher<String> notifPermLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {});
+
+    // ── LIFECYCLE ─────────────────────────────────────────────
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Minta notif permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
                 notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
             }
         }
+
         setContentView(R.layout.activity_setup);
 
         etTvNum    = findViewById(R.id.etTvNum);
@@ -66,31 +85,25 @@ public class SetupActivity extends AppCompatActivity {
             tvIpInfo.setVisibility(View.VISIBLE);
         }
 
+        // Load saved values
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
         etTvName.setText(prefs.getString("tvName", ""));
-        if (etNamaToko != null)
-            etNamaToko.setText(prefs.getString("namaToko", ""));
+        etNamaToko.setText(prefs.getString("namaToko", ""));
 
-        // Download Update button
+        // Tombol connect
+        btnConnect.setOnClickListener(v -> connectAndStart());
+
+        // Download update
         Button btnDownload = findViewById(R.id.btnDownloadUpdate);
         if (btnDownload != null) {
             btnDownload.setOnClickListener(v -> {
-                try {
-                    Intent i = new Intent(Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://github.com/babangaqil/AstrophileTV/releases/latest/download/AstrophileTV.apk"));
-                    startActivity(i);
-                } catch (Exception e) {
-                    showStatus("Gagal buka browser", "#ff4d6d");
-                }
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_URL))); }
+                catch (Exception e) { showStatus("Gagal buka browser", "#ff4d6d"); }
             });
         }
 
-        // Tampilkan status service
-        showStatus(isOverlayServiceRunning() ? "● Monitor Aktif" : "○ Monitor Tidak Aktif",
-                   isOverlayServiceRunning() ? "#00ff88" : "#ffcc00");
-
-        // Force stop button
+        // Force stop
         Button btnForceStop = findViewById(R.id.btnForceStop);
         if (btnForceStop != null) {
             btnForceStop.setOnClickListener(v -> {
@@ -103,20 +116,96 @@ public class SetupActivity extends AppCompatActivity {
                 }, 800);
             });
         }
+
+        // Auto-minta izin overlay jika belum ada
+        if (!hasOverlayPermission()) {
+            showStatus("⚠ Butuh izin tampil di atas layar — memberikan izin...", "#ffcc00");
+            new Handler(Looper.getMainLooper()).postDelayed(this::requestOverlayPermission, 800);
+        }
+
+        registerKasirReceiver();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshStatus();
+        statusHandler.postDelayed(statusRunnable, 2000);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        statusHandler.removeCallbacks(statusRunnable);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        statusHandler.removeCallbacks(statusRunnable);
+        if (kasirReceiver != null) {
+            try { unregisterReceiver(kasirReceiver); } catch (Exception ignored) {}
+        }
+    }
+
+    // ── STATUS POLLING ────────────────────────────────────────
+
+    private void refreshStatus() {
+        boolean running = isOverlayServiceRunning();
+        boolean kasirTerhubung = (System.currentTimeMillis() - lastKasirHit) < 10_000; // 10 detik
+
+        if (!running) {
+            showStatus("○ Monitor Tidak Aktif", "#ff4d6d");
+        } else if (kasirTerhubung) {
+            showStatus("● Monitor Aktif  ·  ✓ Terhubung ke Kasir", "#00ff88");
+        } else {
+            showStatus("● Monitor Aktif  ·  Menunggu Kasir...", "#ffcc00");
+        }
+
+        // Jadwalkan polling berikutnya
+        statusHandler.removeCallbacks(statusRunnable);
+        statusHandler.postDelayed(statusRunnable, 2000);
+    }
+
+    // ── KASIR BROADCAST RECEIVER ──────────────────────────────
+
+    private void registerKasirReceiver() {
+        kasirReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent intent) {
+                lastKasirHit = System.currentTimeMillis();
+                refreshStatus();
+            }
+        };
+        IntentFilter filter = new IntentFilter(ACTION_KASIR_HIT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(kasirReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(kasirReceiver, filter);
+        }
+    }
+
+    // ── CONNECT ───────────────────────────────────────────────
+
     private void connectAndStart() {
-        String tvNumStr  = etTvNum.getText().toString().trim();
-        String tvName    = etTvName.getText().toString().trim();
-        String namaToko  = etNamaToko != null ? etNamaToko.getText().toString().trim() : "";
+        // Cek izin overlay dulu
+        if (!hasOverlayPermission()) {
+            showStatus("⚠ Butuh izin overlay — memberikan izin...", "#ffcc00");
+            requestOverlayPermission();
+            return;
+        }
+
+        String tvNumStr = etTvNum.getText().toString().trim();
+        String tvName   = etTvName.getText().toString().trim();
+        String namaToko = etNamaToko.getText().toString().trim();
 
         int tvNum = 1;
         try { tvNum = Integer.parseInt(tvNumStr); } catch (Exception ignored) {}
         if (tvName.isEmpty())   tvName   = "TV " + tvNum;
         if (namaToko.isEmpty()) namaToko = "ASTROPHILE";
 
-        final int    finalTvNum   = tvNum;
-        final String finalTvName  = tvName;
+        final int    finalTvNum    = tvNum;
+        final String finalTvName   = tvName;
         final String finalNamaToko = namaToko;
 
         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
@@ -125,17 +214,15 @@ public class SetupActivity extends AppCompatActivity {
             .putString("namaToko", finalNamaToko)
             .apply();
 
-        if (!hasOverlayPermission()) {
-            showStatus("Butuh izin overlay — berikan izin lalu klik Hubungkan", "#ffcc00");
-            requestOverlayPermission();
-        } else {
-            stopService(new Intent(this, OverlayService.class));
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                startOverlayService();
-                showStatus("● Monitor Aktif | TV " + finalTvNum + " · " + finalNamaToko, "#00ff88");
-            }, 800);
-        }
+        showStatus("⏳ Memulai monitor...", "#00f5ff");
+        stopService(new Intent(this, OverlayService.class));
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            startOverlayService();
+            refreshStatus();
+        }, 1000);
     }
+
+    // ── OVERLAY PERMISSION ────────────────────────────────────
 
     private boolean hasOverlayPermission() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
@@ -143,10 +230,25 @@ public class SetupActivity extends AppCompatActivity {
 
     private void requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            startActivityForResult(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:" + getPackageName())), REQUEST_OVERLAY);
+            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            startActivityForResult(intent, REQUEST_OVERLAY);
         }
     }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_OVERLAY) {
+            if (hasOverlayPermission()) {
+                showStatus("✓ Izin diberikan — klik Hubungkan", "#00ff88");
+            } else {
+                showStatus("✗ Izin ditolak — tidak bisa menampilkan overlay", "#ff4d6d");
+            }
+        }
+    }
+
+    // ── HELPERS ───────────────────────────────────────────────
 
     private void startOverlayService() {
         Intent si = new Intent(this, OverlayService.class);
@@ -170,14 +272,5 @@ public class SetupActivity extends AppCompatActivity {
             if (OverlayService.class.getName().equals(svc.service.getClassName())) return true;
         }
         return false;
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_OVERLAY) {
-            if (hasOverlayPermission()) showStatus("Izin OK — klik Hubungkan", "#00ff88");
-            else showStatus("Izin ditolak", "#ff4d6d");
-        }
     }
 }
