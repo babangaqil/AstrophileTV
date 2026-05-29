@@ -4,50 +4,25 @@ import android.util.Log;
 
 /**
  * SessionManager — Single source of truth untuk semua state sesi.
- *
- * GUARANTEE:
- * - Zero ghost session: resetSession() wajib dipanggil sebelum sesi baru
- * - Semua field explicit null/false/0 saat reset — tidak ada state tertinggal
- * - Thread-safe via synchronized getter/setter
+ * Versi offline: tanpa Firebase, waktu pakai System.currentTimeMillis().
  */
 public class SessionManager {
 
     private static final String TAG = "AstroSession";
 
-    // ── Server time supplier — selalu sinkron dengan FirebaseManager ─────────
-    private java.util.concurrent.atomic.AtomicLong serverTimeOffset =
-        new java.util.concurrent.atomic.AtomicLong(0L);
-
-    // Supplier langsung dari FirebaseManager — prioritas utama
-    private FirebaseManager firebaseManager = null;
-
-    public void setFirebaseManager(FirebaseManager fm) {
-        this.firebaseManager = fm;
-    }
-
-    public void setServerTimeOffset(long offsetMs) {
-        serverTimeOffset.set(offsetMs);
-    }
-
-    private long serverNow() {
-        // Pakai FirebaseManager.getServerNow() — single source of truth
-        if (firebaseManager != null) return firebaseManager.getServerNow();
-        return System.currentTimeMillis() + serverTimeOffset.get();
-    }
-
     // ── Session State ─────────────────────────────────────────
-    private volatile boolean active      = false;
-    private volatile boolean expired     = false;
-    private volatile String  mode        = "";       // "billing" | "countdown" | ""
-    private volatile long    startTime   = 0L;
-    private volatile long    duration    = 0L;       // detik
-    private volatile long    pausedAt    = 0L;       // 0 = tidak paused
+    private volatile boolean active        = false;
+    private volatile boolean expired       = false;
+    private volatile String  mode          = "";
+    private volatile long    startTime     = 0L;
+    private volatile long    duration      = 0L;
+    private volatile long    pausedAt      = 0L;
     private volatile String  namaPelanggan = "";
-    private volatile String  tvName      = "TV 1";
-    private volatile int     tvNum       = 1;
-    private volatile String  namaToko    = "ASTROPHILE";
+    private volatile String  tvName        = "TV 1";
+    private volatile int     tvNum         = 1;
+    private volatile String  namaToko      = "ASTROPHILE";
 
-    // ── Notify flags — reset tiap sesi ───────────────────────
+    // ── Notify flags ─────────────────────────────────────────
     private volatile boolean toast5Shown = false;
     private volatile boolean toast1Shown = false;
 
@@ -59,12 +34,11 @@ public class SessionManager {
     }
 
     private SessionListener listener;
-
     public void setListener(SessionListener l) { this.listener = l; }
 
-    // ── Full reset — WAJIB dipanggil sebelum sesi baru ───────
+    // ── Full reset ────────────────────────────────────────────
     public synchronized void resetSession() {
-        Log.d(TAG, "resetSession() — clearing all session state");
+        Log.d(TAG, "resetSession()");
         active        = false;
         expired       = false;
         mode          = "";
@@ -77,35 +51,31 @@ public class SessionManager {
         if (listener != null) listener.onSessionReset();
     }
 
-    // ── Populate dari Firebase snapshot ──────────────────────
-    public synchronized void applyFromFirebase(
-            boolean fbActive, boolean fbExpired, String fbMode,
-            long fbStart, long fbDuration, String fbNama, long fbPausedAt) {
+    // ── Apply data (dari LAN/lokal) ───────────────────────────
+    public synchronized void applyFromLocal(boolean fbActive, boolean fbExpired, String fbMode,
+            long fbStart, long fbDuration, long fbPausedAt, String fbNama) {
 
         this.active        = fbActive;
         this.expired       = fbExpired;
-        this.mode          = fbMode   != null ? fbMode   : "";
+        this.mode          = fbMode  != null ? fbMode  : "";
         this.startTime     = fbStart;
         this.duration      = fbDuration;
-        this.namaPelanggan = fbNama   != null ? fbNama   : "";
+        this.namaPelanggan = fbNama  != null ? fbNama  : "";
         this.pausedAt      = fbPausedAt;
 
-        Log.d(TAG, "applyFromFirebase active=" + active + " mode=" + mode
+        Log.d(TAG, "applyFromLocal active=" + active + " mode=" + mode
                 + " start=" + startTime + " dur=" + duration);
 
         if (active && startTime > 0 && listener != null) {
             if (fbExpired) {
-                // Firebase sudah expired — langsung trigger overlay tanpa tunggu countdown
                 listener.onSessionExpired();
             } else if (!this.expired) {
-                // Jangan trigger onSessionStarted kalau sudah expired secara lokal
-                // (mencegah race condition Firebase fire ulang snapshot sebelum expired=true)
                 listener.onSessionStarted();
             }
         }
     }
 
-    // ── Trigger expired ───────────────────────────────────────
+    // ── Mark expired ──────────────────────────────────────────
     public synchronized void markExpired() {
         if (!expired) {
             expired = true;
@@ -129,43 +99,28 @@ public class SessionManager {
     public boolean isToast1Shown()    { return toast1Shown; }
 
     // ── Setters ───────────────────────────────────────────────
-    public void setTvNum(int n)             { tvNum = n; }
-    public void setTvName(String n)         { tvName = n != null ? n : "TV " + tvNum; }
-    public void setNamaToko(String n)       { namaToko = n != null && !n.isEmpty() ? n : "ASTROPHILE"; }
-    public void setPausedAt(long t)         { pausedAt = t; }
-    public void setToast5Shown(boolean v)   { toast5Shown = v; }
-    public void setToast1Shown(boolean v)   { toast1Shown = v; }
+    public void setTvNum(int n)           { tvNum = n; }
+    public void setTvName(String n)       { tvName = n != null ? n : "TV " + tvNum; }
+    public void setNamaToko(String n)     { namaToko = n != null && !n.isEmpty() ? n : "ASTROPHILE"; }
+    public void setPausedAt(long t)       { pausedAt = t; }
+    public void setToast5Shown(boolean v) { toast5Shown = v; }
+    public void setToast1Shown(boolean v) { toast1Shown = v; }
 
     // ── Computed helpers ──────────────────────────────────────
-
-    /** Sisa detik countdown. 0 jika bukan countdown atau sudah habis. */
     public long getRemainingSeconds() {
         if (!"countdown".equals(mode) || startTime == 0) return 0L;
-        long effectiveNow = (pausedAt > 0) ? pausedAt : serverNow();
-        long elapsed = (effectiveNow - startTime) / 1000;
+        long now     = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+        long elapsed = (now - startTime) / 1000;
         return Math.max(0L, duration - elapsed);
     }
 
-    /** Elapsed detik billing. */
     public long getElapsedSeconds() {
         if (startTime == 0) return 0L;
-        long effectiveNow = (pausedAt > 0) ? pausedAt : serverNow();
-        return (effectiveNow - startTime) / 1000;
+        long now = (pausedAt > 0) ? pausedAt : System.currentTimeMillis();
+        return (now - startTime) / 1000;
     }
 
-    public boolean isPaused() { return pausedAt > 0; }
-
-    public boolean isCountdown() { return "countdown".equals(mode); }
-    public boolean isBilling()   { return "billing".equals(mode); }
-
-    /**
-     * Dipanggil saat menerima perintah dari kasir via HTTP LAN (mode offline).
-     * Struktur payload sama persis dengan Firebase activeSessions.
-     */
-    public void applyFromLocal(boolean active, boolean fbExpired, String mode,
-                                long start, long duration, long pausedAt, String namaP) {
-        // Delegasi ke applyFromFirebase — urutan parameter: active,expired,mode,start,duration,nama,pausedAt
-        applyFromFirebase(active, fbExpired, mode, start, duration, namaP, pausedAt);
-    }
-
+    public boolean isPaused()     { return pausedAt > 0; }
+    public boolean isCountdown()  { return "countdown".equals(mode); }
+    public boolean isBilling()    { return "billing".equals(mode); }
 }

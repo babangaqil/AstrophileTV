@@ -1,368 +1,51 @@
 package com.astrophile.tvoverlay;
 
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.util.Log;
-
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.FirebaseOptions;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.ValueEventListener;
-
 /**
- * FirebaseManager — Zero duplicate listener guarantee.
- *
- * GUARANTEE:
- * - Setiap listener disimpan ke named field
- * - removeListener() SELALU dipanggil sebelum addListener()
- * - destroyAll() membersihkan SEMUA listener sekaligus
- * - Reconnect-safe: re-attach otomatis tanpa akumulasi
+ * FirebaseManager — stub kosong.
+ * Semua sesi dikelola via LAN (LocalHttpServer).
+ * File ini dipertahankan agar tidak ada perubahan di build.gradle / import lain.
  */
 public class FirebaseManager {
 
-    private static final String TAG   = "AstroFirebase";
-    private static final String PREFS = "astro_tv_prefs";
+    public FirebaseManager(android.content.Context ctx) {}
 
-    // ── Firebase instance ─────────────────────────────────────
-    private FirebaseDatabase db;
-    private final Context    ctx;
+    public boolean init()    { return true; }
+    public boolean isReady() { return true; }
 
-    // ── Server time offset — koreksi jam lokal Android vs Firebase ─
-    // offset = serverTime - localTime (bisa positif atau negatif)
-    private volatile long serverTimeOffsetMs = 0L;
+    public void destroyAll() {}
 
-    private DatabaseReference serverTimeRef;
-    private ValueEventListener serverTimeListener;
-
-    // ── Refs + Listeners — semua disimpan agar bisa di-remove ─
-    private DatabaseReference sessionRef;
-    private ValueEventListener sessionListener;
-
-    private DatabaseReference connectedRef;
-    private ValueEventListener connectedListener;
-
-    private DatabaseReference storeNameRef;
-    private ValueEventListener storeNameListener;
-
-    private DatabaseReference tvControlRef;
-    private ValueEventListener tvControlListener;
-
-    private DatabaseReference bayarStatusRef;
-    private ValueEventListener bayarStatusListener;
-
-    // ── Callback interfaces ───────────────────────────────────
+    // Stub listener methods — tidak melakukan apa-apa
     public interface SessionDataCallback {
-        void onData(DataSnapshot snap);
+        void onData(Object snap);
         void onCancelled(String error);
     }
-
     public interface ConnectionCallback {
         void onConnected();
         void onDisconnected();
     }
-
-    public interface StringCallback {
-        void onValue(String value);
-    }
-
-    public interface CommandCallback {
-        void onCommand(String cmd);
-    }
-
-    public interface BayarCallback {
-        void onBayarStatus(String status);
-    }
-
-    // ── Constructor ───────────────────────────────────────────
-    public FirebaseManager(Context ctx) {
-        this.ctx = ctx;
-    }
-
-    // ── Init Firebase instance ────────────────────────────────
-    public boolean init() {
-        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        String apiKey   = prefs.getString("apiKey",    "");
-        String dbUrl    = prefs.getString("dbUrl",     "");
-        String projId   = prefs.getString("projectId", "");
-        String appId    = prefs.getString("appId",     "");
-
-        if (apiKey.isEmpty() || dbUrl.isEmpty()) {
-            Log.e(TAG, "init() FAILED — apiKey or dbUrl empty");
-            return false;
-        }
-
-        try {
-            FirebaseApp app;
-            try {
-                app = FirebaseApp.getInstance("_tv_overlay");
-            } catch (Exception e) {
-                String finalAppId = appId.isEmpty()
-                    ? "1:000000000000:android:0000000000000000000000"
-                    : appId;
-                app = FirebaseApp.initializeApp(ctx,
-                    new FirebaseOptions.Builder()
-                        .setApiKey(apiKey)
-                        .setDatabaseUrl(dbUrl)
-                        .setProjectId(projId)
-                        .setApplicationId(finalAppId)
-                        .build(),
-                    "_tv_overlay");
-            }
-            db = FirebaseDatabase.getInstance(app);
-            db.setPersistenceEnabled(true); // Enable persistence — buffer saat koneksi putus sesaat
-            try { db.goOnline(); } catch (Exception e) { Log.w(TAG, "goOnline: " + e.getMessage()); }
-            Log.d(TAG, "init() OK — db=" + dbUrl);
-            return true;
-        } catch (Exception e) {
-            Log.e(TAG, "init() exception: " + e.getMessage(), e);
-            return false;
-        }
-    }
-
-    public boolean isReady() { return db != null; }
-
-    /** Kembalikan estimasi waktu server saat ini (ms), sudah dikoreksi offset. */
-    public long getServerNow() {
-        return System.currentTimeMillis() + serverTimeOffsetMs;
-    }
-
-    /** Mulai listen .info/serverTimeOffset — update otomatis saat ada perubahan jaringan. */
-    public void startServerTimeSync() {
-        if (db == null) return;
-        stopServerTimeSync();
-        serverTimeRef = db.getReference(".info/serverTimeOffset");
-        serverTimeListener = new ValueEventListener() {
-            @Override public void onDataChange(DataSnapshot snap) {
-                Object raw = snap.getValue();
-                if (raw instanceof Number) {
-                    serverTimeOffsetMs = ((Number) raw).longValue();
-                    Log.d(TAG, "serverTimeOffset updated: " + serverTimeOffsetMs + "ms");
-                }
-            }
-            @Override public void onCancelled(DatabaseError e) {
-                Log.w(TAG, "serverTimeOffset listen cancelled: " + e.getMessage());
-            }
-        };
-        serverTimeRef.addValueEventListener(serverTimeListener);
-    }
-
-    public void stopServerTimeSync() {
-        if (serverTimeRef != null && serverTimeListener != null) {
-            serverTimeRef.removeEventListener(serverTimeListener);
-        }
-        serverTimeListener = null;
-        serverTimeRef      = null;
-    }
-
-    // ── Session listener ──────────────────────────────────────
-    public void listenSession(int tvNum, SessionDataCallback cb) {
-        if (db == null) { Log.e(TAG, "listenSession — db null"); return; }
-
-        // WAJIB: remove listener lama sebelum attach baru
-        removeSessionListener();
-
-        sessionRef = db.getReference("settings/activeSessions/" + tvNum);
-        sessionListener = new ValueEventListener() {
-            @Override public void onDataChange(DataSnapshot snap) {
-                Log.d(TAG, "sessionListener.onDataChange tv=" + tvNum);
-                cb.onData(snap);
-            }
-            @Override public void onCancelled(DatabaseError e) {
-                Log.e(TAG, "sessionListener.onCancelled: " + e.getMessage());
-                cb.onCancelled(e.getMessage());
-            }
-        };
-        sessionRef.addValueEventListener(sessionListener);
-        sessionRef.keepSynced(true); // Force fetch dari server, bypass cache lama
-        Log.d(TAG, "listenSession attached tv=" + tvNum);
-    }
-
-    public void removeSessionListener() {
-        if (sessionRef != null && sessionListener != null) {
-            sessionRef.removeEventListener(sessionListener);
-            Log.d(TAG, "removeSessionListener OK");
-        }
-        sessionListener = null;
-    }
-
-    // ── Connection state listener ─────────────────────────────
-    public void listenConnection(ConnectionCallback cb) {
-        if (db == null) return;
-
-        // Remove old first
-        removeConnectionListener();
-
-        connectedRef = db.getReference(".info/connected");
-        connectedListener = new ValueEventListener() {
-            @Override public void onDataChange(DataSnapshot snap) {
-                Boolean connected = snap.getValue(Boolean.class);
-                if (Boolean.TRUE.equals(connected)) {
-                    Log.d(TAG, "Firebase CONNECTED");
-                    cb.onConnected();
-                } else {
-                    Log.d(TAG, "Firebase DISCONNECTED");
-                    cb.onDisconnected();
-                }
-            }
-            @Override public void onCancelled(DatabaseError e) {
-                Log.e(TAG, "connectedListener cancelled: " + e.getMessage());
-            }
-        };
-        connectedRef.addValueEventListener(connectedListener);
-    }
-
-    public void removeConnectionListener() {
-        if (connectedRef != null && connectedListener != null) {
-            connectedRef.removeEventListener(connectedListener);
-        }
-        connectedListener = null;
-    }
-
-    // ── Store name listener ───────────────────────────────────
-    public void listenStoreName(StringCallback cb) {
-        if (db == null) return;
-
-        removeStoreNameListener();
-
-        storeNameRef = db.getReference("settings/namaToko");
-        storeNameListener = new ValueEventListener() {
-            @Override public void onDataChange(DataSnapshot snap) {
-                String name = snap.getValue(String.class);
-                if (name != null && !name.isEmpty()) cb.onValue(name);
-            }
-            @Override public void onCancelled(DatabaseError e) {
-                Log.e(TAG, "storeNameListener cancelled: " + e.getMessage());
-            }
-        };
-        storeNameRef.addValueEventListener(storeNameListener);
-    }
-
-    public void removeStoreNameListener() {
-        if (storeNameRef != null && storeNameListener != null) {
-            storeNameRef.removeEventListener(storeNameListener);
-        }
-        storeNameListener = null;
-    }
-
-    // ── TV control command listener ───────────────────────────
-    // Callback bawa full snap agar showbayar bisa baca bayarStatusOverlay (seperti v1.9)
+    public interface StringCallback  { void onValue(String value); }
+    public interface CommandCallback { void onCommand(String cmd); }
+    public interface BayarCallback   { void onBayarStatus(String status); }
     public interface SnapCommandCallback {
-        void onCommand(String cmd, DataSnapshot snap);
+        void onCommand(String cmd, Object snap);
     }
 
-    public void listenTvControl(int tvNum, SnapCommandCallback cb) {
-        if (db == null) return;
-
-        removeTvControlListener();
-
-        tvControlRef = db.getReference("settings/tvControl/" + tvNum);
-        tvControlListener = new ValueEventListener() {
-            @Override public void onDataChange(DataSnapshot snap) {
-                if (!snap.exists()) return;
-                String cmd = snap.child("cmd").getValue(String.class);
-                // Filter "none" dan kosong — jangan trigger command saat reset
-                if (cmd != null && !cmd.isEmpty() && !cmd.equals("none")) cb.onCommand(cmd, snap);
-            }
-            @Override public void onCancelled(DatabaseError e) {
-                Log.e(TAG, "tvControlListener cancelled: " + e.getMessage());
-            }
-        };
-        tvControlRef.addValueEventListener(tvControlListener);
-    }
-
-    public void removeTvControlListener() {
-        if (tvControlRef != null && tvControlListener != null) {
-            tvControlRef.removeEventListener(tvControlListener);
-        }
-        tvControlListener = null;
-    }
-
-    // ── Bayar status listener ─────────────────────────────────
-    public void listenBayarStatus(int tvNum, BayarCallback cb) {
-        if (db == null) return;
-
-        removeBayarStatusListener();
-
-        // Listen bayarStatusOverlay (status AGREGAT: main+items+tambahan) agar sync dengan badge kasir
-        bayarStatusRef = db.getReference("settings/activeSessions/" + tvNum + "/bayarStatusOverlay");
-        bayarStatusListener = new ValueEventListener() {
-            @Override public void onDataChange(DataSnapshot snap) {
-                String status = snap.getValue(String.class);
-                cb.onBayarStatus(status != null ? status : "");
-            }
-            @Override public void onCancelled(DatabaseError e) {
-                Log.e(TAG, "bayarStatusListener cancelled: " + e.getMessage());
-            }
-        };
-        bayarStatusRef.addValueEventListener(bayarStatusListener);
-    }
-
-    public void removeBayarStatusListener() {
-        if (bayarStatusRef != null && bayarStatusListener != null) {
-            bayarStatusRef.removeEventListener(bayarStatusListener);
-        }
-        bayarStatusListener = null;
-    }
-
-    // ── Write helpers ─────────────────────────────────────────
-    public void setLastSeen(int tvNum, long timestamp) {
-        if (db == null) return;
-        db.getReference("settings/tvStatus/" + tvNum + "/lastSeen")
-            .setValue(timestamp, (err, ref) -> {
-                if (err != null) Log.e(TAG, "setLastSeen error: " + err.getMessage());
-            });
-    }
-
-    public void setTvOnline(int tvNum, boolean online) {
-        if (db == null) return;
-        com.google.firebase.database.DatabaseReference ref =
-            db.getReference("settings/tvStatus/" + tvNum);
-
-        // onDisconnect — otomatis set online:false saat koneksi TV terputus mendadak
-        // (TV mati, uninstall, internet putus, dsb)
-        ref.child("online").onDisconnect().setValue(false);
-        ref.child("lastSeen").onDisconnect().setValue(
-            com.google.firebase.database.ServerValue.TIMESTAMP);
-
-        // Set nilai sekarang
-        java.util.Map<String, Object> updates = new java.util.HashMap<>();
-        updates.put("online",   online);
-        updates.put("lastSeen", com.google.firebase.database.ServerValue.TIMESTAMP);
-        ref.updateChildren(updates, (err, r) -> {
-            if (err != null) Log.e(TAG, "setTvOnline error: " + err.getMessage());
-        });
-    }
-
-    public void setActiveSession(int tvNum, boolean active) {
-        if (db == null) return;
-        db.getReference("settings/activeSessions/" + tvNum + "/active")
-            .setValue(active, (err, ref) -> {
-                if (err != null) Log.e(TAG, "setActiveSession error: " + err.getMessage());
-            });
-    }
-
-    public com.google.firebase.database.FirebaseDatabase getDb() { return db; }
-
-    public void clearTvControlCmd(int tvNum) {
-        if (db == null) return;
-        db.getReference("settings/tvControl/" + tvNum + "/cmd")
-            .setValue("none", (err, ref) -> {
-                if (err != null) Log.e(TAG, "clearTvControlCmd error: " + err.getMessage());
-            });
-    }
-
-    // ── Destroy ALL listeners — wajib dipanggil di onDestroy ─
-    public void destroyAll() {
-        Log.d(TAG, "destroyAll() — removing all Firebase listeners");
-        stopServerTimeSync();
-        removeSessionListener();
-        removeConnectionListener();
-        removeStoreNameListener();
-        removeTvControlListener();
-        removeBayarStatusListener();
-        db = null;
-    }
+    public void listenSession(int tvNum, SessionDataCallback cb)        {}
+    public void removeSessionListener()                                  {}
+    public void listenConnection(ConnectionCallback cb)                  {}
+    public void removeConnectionListener()                               {}
+    public void listenStoreName(StringCallback cb)                       {}
+    public void removeStoreNameListener()                                {}
+    public void listenTvControl(int tvNum, SnapCommandCallback cb)      {}
+    public void removeTvControlListener()                                {}
+    public void listenBayarStatus(int tvNum, BayarCallback cb)          {}
+    public void removeBayarStatusListener()                              {}
+    public void startServerTimeSync()                                    {}
+    public void stopServerTimeSync()                                     {}
+    public long getServerNow()  { return System.currentTimeMillis(); }
+    public void setLastSeen(int tvNum, long ts)                          {}
+    public void setTvOnline(int tvNum, boolean online)                   {}
+    public void setActiveSession(int tvNum, boolean active)              {}
+    public void clearTvControlCmd(int tvNum)                             {}
+    public Object getDb() { return null; }
 }

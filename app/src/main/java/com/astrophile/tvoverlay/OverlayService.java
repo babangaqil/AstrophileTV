@@ -25,21 +25,11 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-import com.google.firebase.database.DataSnapshot;
-
 import java.util.Locale;
 
 /**
- * OverlayService — Production-grade 24/7 refactor.
- *
- * Semua concern dipecah ke manager terpisah:
- * - SessionManager    : single source of truth session state
- * - FirebaseManager   : zero duplicate listener
- * - WebViewManager    : zero WebView accumulation, full hardening
- * - TimerManager      : zero duplicate timer, watchdog self-healing
- * - AstroAudioManager : zero thread leak, auto timeout alarm
- *
- * OverlayService hanya wiring + UI orchestration.
+ * OverlayService — Versi offline bersih tanpa Firebase.
+ * Semua sesi diterima via LAN (LocalHttpServer port 8080).
  */
 public class OverlayService extends Service {
 
@@ -49,17 +39,14 @@ public class OverlayService extends Service {
 
     // Managers
     private SessionManager    sessionManager;
-    private FirebaseManager   firebaseManager;
     private WebViewManager    webViewManager;
     private TimerManager      timerManager;
     private AstroAudioManager audioManager;
-    private LocalHttpServer              localHttpServer;
-    private java.util.Timer              heartbeatTimer;
-    private android.content.BroadcastReceiver modeReceiver;
+    private LocalHttpServer   localHttpServer;
 
-    // UI views (XML layout — bukan WebView)
+    // UI views
     private View widgetView;
-    private WindowManager.LayoutParams widgetParams; // simpan params untuk updateViewLayout
+    private WindowManager.LayoutParams widgetParams;
     private View expiredView;
     private View toastView;
 
@@ -72,7 +59,7 @@ public class OverlayService extends Service {
     private int    tvNum  = 1;
     private String tvName = "TV 1";
 
-    // State flags
+    // State
     private boolean isShowingTimeOverlay = false;
     private String  currentBayarStatus   = "belum";
 
@@ -83,13 +70,14 @@ public class OverlayService extends Service {
     // Sleep view
     private View sleepView = null;
 
-    // Time overlay (v1.9 style — langsung inline WebView)
+    // Time overlay
     private android.webkit.WebView timeOverlayWv = null;
 
-    // Bayar overlay (v1.9 style — langsung inline WebView)
+    // Bayar overlay
     private android.webkit.WebView bayarOverlayWv = null;
-    private com.google.firebase.database.DatabaseReference  bayarStatusRef      = null;
-    private com.google.firebase.database.ValueEventListener bayarStatusListener = null;
+
+    // Widget CountDown
+    private android.os.CountDownTimer widgetCountDown = null;
 
     // =========================================================
     // LIFECYCLE
@@ -111,34 +99,12 @@ public class OverlayService extends Service {
         startForegroundNotification();
         initManagers();
         initOverlayViews();
-        initFirebaseAndStart();
+        initFromPrefs();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand()");
-
-        int savedCode   = getSharedPreferences("astro_tv_svc", MODE_PRIVATE)
-                              .getInt("running_version_code", -1);
-        int currentCode = getCurrentVersionCode();
-
-        if (savedCode != -1 && currentCode != -1 && savedCode != currentCode) {
-            Log.i(TAG, "APK updated " + savedCode + "→" + currentCode + " reinit");
-            getSharedPreferences("astro_tv_svc", MODE_PRIVATE).edit()
-                .putInt("running_version_code", currentCode).apply();
-            initFirebaseAndStart();
-            return START_STICKY;
-        }
-        if (currentCode != -1) {
-            getSharedPreferences("astro_tv_svc", MODE_PRIVATE).edit()
-                .putInt("running_version_code", currentCode).apply();
-        }
-
-        if (!firebaseManager.isReady()) {
-            initFirebaseAndStart();
-        } else {
-            attachAllFirebaseListeners();
-        }
         return START_STICKY;
     }
 
@@ -149,13 +115,6 @@ public class OverlayService extends Service {
 
         timerManager.destroyAll();
         stopWidgetCountDown();
-        // Set offline sebelum destroy — untuk kasus stop/uninstall normal
-        stopHeartbeat();
-        try { firebaseManager.setTvOnline(tvNum, false); } catch (Exception ignored) {}
-        try { if (modeReceiver != null) unregisterReceiver(modeReceiver); } catch (Exception ignored) {}
-        firebaseManager.destroyAll();
-        if (globalUpdateRef != null && globalUpdateListener != null)
-            globalUpdateRef.removeEventListener(globalUpdateListener);
         if (localHttpServer != null) localHttpServer.stop();
         webViewManager.destroyAll();
         audioManager.destroy();
@@ -166,15 +125,14 @@ public class OverlayService extends Service {
             tts = null;
         }
 
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try { wakeLock.release(); } catch (Exception ignored) {}
+        }
+
         safeRemoveView(widgetView,  "widgetView");
         safeRemoveView(toastView,   "toastView");
         safeRemoveView(expiredView, "expiredView");
         safeRemoveView(sleepView,   "sleepView");
-
-        try {
-            com.google.firebase.database.FirebaseDatabase.getInstance()
-                .getReference("settings/tvStatus/" + tvNum + "/online").setValue(false);
-        } catch (Exception e) { Log.e(TAG, "setOffline: " + e.getMessage()); }
     }
 
     @Override
@@ -191,61 +149,19 @@ public class OverlayService extends Service {
     // =========================================================
 
     private void initManagers() {
-        sessionManager  = new SessionManager();
-        firebaseManager = new FirebaseManager(this);
-        sessionManager.setFirebaseManager(firebaseManager); // single source of truth server time
-        // Register receiver untuk toggle Online/Offline dari SetupActivity
-        modeReceiver = new android.content.BroadcastReceiver() {
-            @Override
-            public void onReceive(android.content.Context ctx, android.content.Intent intent) {
-                boolean offline = intent.getBooleanExtra("offline", false);
-                handleSetMode(offline ? "offline" : "online");
-                Log.i(TAG, "modeReceiver: offline=" + offline);
-            }
-        };
-        android.content.IntentFilter filter = new android.content.IntentFilter("com.astrophile.SET_MODE");
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(modeReceiver, filter, RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(modeReceiver, filter);
-        }
-
-        // Terapkan mode tersimpan saat service start
-        android.content.SharedPreferences prefs = getSharedPreferences("astro_tv_prefs", MODE_PRIVATE);
-        boolean savedOffline = prefs.getBoolean("offline_mode", false);
-        if (savedOffline) {
-            mainHandler.postDelayed(() -> handleSetMode("offline"), 2000);
-            Log.i(TAG, "Restored offline mode from prefs");
-        }
-
-        // Jalankan HTTP server untuk mode offline (LAN)
-        try {
-            localHttpServer = new LocalHttpServer(payload -> {
-                mainHandler.post(() -> handleLocalCommand(payload));
-            });
-            localHttpServer.start();
-        } catch (Exception e) {
-            Log.e(TAG, "Gagal start HTTP server: " + e.getMessage());
-        }
-        webViewManager  = new WebViewManager(this, windowManager);
-        timerManager    = new TimerManager(mainHandler);
-        audioManager    = new AstroAudioManager();
+        sessionManager = new SessionManager();
+        webViewManager = new WebViewManager(this, windowManager);
+        timerManager   = new TimerManager(mainHandler);
+        audioManager   = new AstroAudioManager();
 
         sessionManager.setListener(new SessionManager.SessionListener() {
             @Override public void onSessionStarted() {
                 mainHandler.post(() -> {
-                    // Jangan lakukan apapun kalau expired overlay sedang tampil
-                    // (cegah race condition Firebase snapshot fire ulang sebelum expired=true)
                     if (sessionManager.isExpired()) return;
                     stopWidgetCountDown();
                     webViewManager.destroyAll();
                     isShowingTimeOverlay = false;
-                    firebaseManager.clearTvControlCmd(tvNum);
-                    // Auto wake saat sesi mulai — kalau layar sedang sleep, langsung gelap dihilangkan
                     if (sleepView != null) hideSleep();
-                    // Tulis balik active:true ke Firebase agar kasir tahu TV aktif (seperti v1.9)
-                    firebaseManager.setActiveSession(tvNum, true);
-                    firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
                     if (sessionManager.getStartTime() > 0) updateWidget();
                 });
             }
@@ -256,122 +172,28 @@ public class OverlayService extends Service {
                 mainHandler.post(() -> hideAll());
             }
         });
+
+        // HTTP server LAN — satu-satunya sumber perintah kasir
+        try {
+            localHttpServer = new LocalHttpServer(payload ->
+                mainHandler.post(() -> handleLocalCommand(payload)));
+            localHttpServer.start();
+            Log.i(TAG, "LocalHttpServer started on port " + LocalHttpServer.PORT);
+        } catch (Exception e) {
+            Log.e(TAG, "Gagal start HTTP server: " + e.getMessage());
+        }
     }
 
-    private void initFirebaseAndStart() {
+    private void initFromPrefs() {
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         tvNum  = prefs.getInt("tvNum", 1);
         tvName = prefs.getString("tvName", "TV " + tvNum);
         sessionManager.setTvNum(tvNum);
         sessionManager.setTvName(tvName);
 
-        boolean ok = firebaseManager.init();
-        if (!ok) {
-            Log.e(TAG, "Firebase init failed — retry in 10s");
-            mainHandler.postDelayed(this::initFirebaseAndStart, 10_000);
-            return;
-        }
-
-        // Mulai sinkronisasi server time — wajib agar sisaSec akurat vs kasir
-        firebaseManager.startServerTimeSync();
-        attachAllFirebaseListeners();
         startTicker();
         initTTS();
-        firebaseManager.setTvOnline(tvNum, true);
-        startHeartbeat();
-        checkGlobalUpdate();
-        try {
-            com.google.firebase.database.FirebaseDatabase.getInstance()
-                .getReference("settings/tvStatus/" + tvNum + "/online")
-                .onDisconnect().setValue(false);
-        } catch (Exception e) { Log.e(TAG, "onDisconnect: " + e.getMessage()); }
-    }
-
-    private void attachAllFirebaseListeners() {
-        firebaseManager.listenSession(tvNum, new FirebaseManager.SessionDataCallback() {
-            @Override public void onData(DataSnapshot snap) { handleFirebaseData(snap); }
-            @Override public void onCancelled(String error) {
-                Log.e(TAG, "sessionListener cancelled: " + error + " — retry 2s");
-                mainHandler.postDelayed(() -> {
-                    try { com.google.firebase.database.FirebaseDatabase.getInstance().goOnline(); }
-                    catch (Exception e) { Log.e(TAG, "goOnline: " + e.getMessage()); }
-                    // Re-attach + keepSynced seperti v1.9 agar langsung fetch dari server
-                    mainHandler.postDelayed(() -> firebaseManager.listenSession(tvNum, this), 500);
-                }, 2000);
-            }
-        });
-
-        firebaseManager.listenConnection(new FirebaseManager.ConnectionCallback() {
-            @Override public void onConnected() {
-                Log.d(TAG, "Firebase CONNECTED");
-                // Hanya update status online — listener sudah persistent, tidak perlu re-attach
-                firebaseManager.setTvOnline(tvNum, true);
-                firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
-                // Sinkronisasi server time offset ke SessionManager agar getRemainingSeconds() akurat
-                sessionManager.setServerTimeOffset(
-                    firebaseManager.getServerNow() - System.currentTimeMillis());
-            }
-            @Override public void onDisconnected() {
-                Log.w(TAG, "Firebase DISCONNECTED — goOnline in 5s");
-                mainHandler.postDelayed(() -> {
-                    try { com.google.firebase.database.FirebaseDatabase.getInstance().goOnline(); }
-                    catch (Exception e) { Log.e(TAG, "goOnline: " + e.getMessage()); }
-                }, 5000);
-            }
-        });
-
-        firebaseManager.listenStoreName(name -> {
-            sessionManager.setNamaToko(name);
-            mainHandler.post(() -> {
-                if (webViewManager.isExpiredAttached())
-                    injectExpiredData(webViewManager.getExpiredOverlay());
-            });
-        });
-
-        firebaseManager.listenTvControl(tvNum, (cmd, snap) -> {
-            Log.d(TAG, "tvControl cmd=" + cmd);
-            mainHandler.post(() -> handleTvCommand(cmd, snap));
-        });
-
-        timerManager.startHeartbeat(() ->
-            firebaseManager.setLastSeen(tvNum, System.currentTimeMillis()));
-    }
-
-    // =========================================================
-    // FIREBASE DATA HANDLER
-    // =========================================================
-
-    private void handleFirebaseData(DataSnapshot snap) {
-        if (!snap.exists()) {
-            mainHandler.post(() -> sessionManager.resetSession());
-            return;
-        }
-
-        Boolean fbActive     = snap.child("active").getValue(Boolean.class);
-        Boolean fbProcessing = snap.child("processing").getValue(Boolean.class);
-        String  fbMode       = snap.child("mode").getValue(String.class);
-        Boolean fbExpired    = snap.child("expired").getValue(Boolean.class);
-        Long    fbStart      = snap.child("start").getValue(Long.class);
-        Long    fbDur        = snap.child("duration").getValue(Long.class);
-        String  fbNama       = snap.child("namaPelanggan").getValue(String.class);
-        Long    fbPausedAt   = snap.child("pausedAt").getValue(Long.class);
-
-        boolean isAct  = Boolean.TRUE.equals(fbActive);
-        boolean isProc = Boolean.TRUE.equals(fbProcessing) || "processing".equals(fbMode);
-
-        if (isProc)                    { mainHandler.post(this::hideAll); return; }
-        if (!isAct)                    { mainHandler.post(() -> sessionManager.resetSession()); return; }
-        if ("reserved".equals(fbMode)) { mainHandler.post(this::hideAll); return; }
-
-        sessionManager.applyFromFirebase(
-            isAct,
-            Boolean.TRUE.equals(fbExpired),
-            fbMode,
-            fbStart    != null ? fbStart    : 0L,
-            fbDur      != null ? fbDur      : 0L,
-            fbNama,
-            fbPausedAt != null ? fbPausedAt : 0L
-        );
+        Log.i(TAG, "OverlayService ready — TV " + tvNum + " | LAN only");
     }
 
     // =========================================================
@@ -380,16 +202,8 @@ public class OverlayService extends Service {
 
     private void startTicker() {
         timerManager.startTicker(() -> {
-            // onTick sudah di-post ke mainHandler oleh TimerManager — langsung update
             if (!sessionManager.isActive() || sessionManager.isExpired()) return;
             updateWidget();
-            if (sessionManager.getStartTime() == 0) {
-                Log.w(TAG, "active but startTime=0 — force re-fetch");
-                firebaseManager.listenSession(tvNum, new FirebaseManager.SessionDataCallback() {
-                    @Override public void onData(DataSnapshot s)    { handleFirebaseData(s); }
-                    @Override public void onCancelled(String err)   { Log.e(TAG, "refetch: " + err); }
-                });
-            }
         });
 
         timerManager.startWatchdog(() -> {
@@ -400,30 +214,18 @@ public class OverlayService extends Service {
 
     // =========================================================
     // WIDGET
-
-    // ── CountDownTimer native — lebih reliable dari ticker untuk UI overlay ──
-    private android.os.CountDownTimer widgetCountDown = null;
+    // =========================================================
 
     private void startWidgetCountDown(long sisaMs) {
         stopWidgetCountDown();
         if (sisaMs <= 0) return;
 
         widgetCountDown = new android.os.CountDownTimer(sisaMs, 1000) {
-            @Override
-            public void onTick(long millisUntilFinished) {
-                renderWidget(millisUntilFinished / 1000);
-            }
-            @Override
-            public void onFinish() {
+            @Override public void onTick(long ms) { renderWidget(ms / 1000); }
+            @Override public void onFinish() {
                 renderWidget(0);
                 widgetView.setVisibility(View.GONE);
                 sessionManager.markExpired();
-                try {
-                    com.google.firebase.database.FirebaseDatabase db =
-                        com.google.firebase.database.FirebaseDatabase.getInstance();
-                    db.getReference("settings/activeSessions/" + tvNum + "/expired").setValue(true);
-                    db.getReference("settings/activeSessions/" + tvNum + "/active").setValue(true);
-                } catch (Exception e) { Log.e(TAG, "setExpired: " + e.getMessage()); }
             }
         }.start();
         Log.d(TAG, "startWidgetCountDown sisaMs=" + sisaMs);
@@ -458,7 +260,6 @@ public class OverlayService extends Service {
             widgetView.setVisibility(View.GONE);
         }
 
-        // Force WindowManager refresh
         try {
             if (widgetParams != null) windowManager.updateViewLayout(widgetView, widgetParams);
         } catch (Exception ignored) {}
@@ -480,10 +281,7 @@ public class OverlayService extends Service {
             return;
         }
 
-        // Hanya start CountDownTimer baru jika belum jalan atau selisih > 3 detik (resync)
         if (widgetCountDown == null) {
-            long sisaMs = secs * 1000L;
-            // TTS warnings
             if (secs <= 60 && !sessionManager.isToast1Shown()) {
                 sessionManager.setToast1Shown(true);
                 speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
@@ -491,11 +289,11 @@ public class OverlayService extends Service {
                 sessionManager.setToast5Shown(true);
                 speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
             }
-            startWidgetCountDown(sisaMs);
+            startWidgetCountDown(secs * 1000L);
         }
     }
 
-        // =========================================================
+    // =========================================================
     // EXPIRED OVERLAY
     // =========================================================
 
@@ -507,19 +305,16 @@ public class OverlayService extends Service {
 
         audioManager.startAlarm();
 
-        // Attach dulu ke WindowManager sebelum load, supaya overlay muncul tepat waktu
         webViewManager.getOrCreateExpiredOverlay(
             "file:///android_asset/expired.html",
             () -> injectExpiredData(webViewManager.getExpiredOverlay())
         );
 
-        // Attach ke window — kalau sudah attached (reuse sesi lama) skip addView
         if (!webViewManager.isExpiredAttached()) {
             webViewManager.attachExpiredOverlay(makeFullscreenParams(PixelFormat.OPAQUE));
         } else {
-            // Sudah attached dari sesi sebelumnya — pastikan visible
             android.webkit.WebView ev = webViewManager.getExpiredOverlay();
-            if (ev != null) ev.setVisibility(android.view.View.VISIBLE);
+            if (ev != null) ev.setVisibility(View.VISIBLE);
         }
     }
 
@@ -541,42 +336,46 @@ public class OverlayService extends Service {
     }
 
     // =========================================================
-    // TV CONTROL COMMANDS
+    // TV CONTROL COMMANDS (dari LAN)
     // =========================================================
 
-    private void handleTvCommand(String cmd, com.google.firebase.database.DataSnapshot snap) {
-        if (cmd == null || cmd.isEmpty() || "none".equals(cmd)) return;
-        switch (cmd) {
-            case "sleep":
-                showSleep();
-                firebaseManager.clearTvControlCmd(tvNum);
-                break;
-            case "wake":
-                hideSleep();
-                firebaseManager.clearTvControlCmd(tvNum);
-                break;
-            case "showtime":
-                showTimeOverlay();
-                firebaseManager.clearTvControlCmd(tvNum);
-                break;
-            case "showbayar":
-                // Baca bayarStatusOverlay dari snap (agregat) — sama seperti v1.9
-                String bs = snap != null ? snap.child("bayarStatusOverlay").getValue(String.class) : null;
-                if (bs == null && snap != null) bs = snap.child("bayarStatus").getValue(String.class);
-                showBayarOverlay(bs != null ? bs : currentBayarStatus);
-                firebaseManager.clearTvControlCmd(tvNum);
-                break;
-            case "hidebayar":
-                hideBayarOverlay();
-                firebaseManager.clearTvControlCmd(tvNum);
-                break;
-            default:
-                Log.w(TAG, "Unknown cmd: " + cmd);
+    private void handleLocalCommand(JSONObject p) {
+        try {
+            String tvCmd = p.optString("_cmd", "");
+            if (!tvCmd.isEmpty()) {
+                Log.d(TAG, "handleLocalCommand _cmd=" + tvCmd);
+                switch (tvCmd) {
+                    case "sleep":     showSleep();    break;
+                    case "wake":      hideSleep();    break;
+                    case "showtime":  showTimeOverlay(); break;
+                    case "showbayar":
+                        String bs = p.optString("bayarStatus", currentBayarStatus);
+                        showBayarOverlay(bs != null ? bs : "belum");
+                        break;
+                    case "hidebayar": hideBayarOverlay(); break;
+                    default: Log.w(TAG, "unknown _cmd=" + tvCmd);
+                }
+                return;
+            }
+
+            // Payload sesi
+            boolean active   = p.optBoolean("active", false);
+            boolean expired  = p.optBoolean("expired", false);
+            String  mode     = p.optString("mode", "countdown");
+            long    start    = p.optLong("start", 0);
+            long    duration = p.optLong("duration", 0);
+            long    pausedAt = p.optLong("pausedAt", 0);
+            String  namaP    = p.optString("namaPelanggan", "");
+
+            sessionManager.applyFromLocal(active, expired, mode, start, duration, pausedAt, namaP);
+            Log.d(TAG, "handleLocalCommand: active=" + active + " mode=" + mode + " expired=" + expired);
+        } catch (Exception e) {
+            Log.e(TAG, "handleLocalCommand error: " + e.getMessage());
         }
     }
 
     // =========================================================
-    // HIDE ALL — full session cleanup
+    // HIDE ALL
     // =========================================================
 
     private void hideAll() {
@@ -585,164 +384,118 @@ public class OverlayService extends Service {
         if (widgetView  != null) widgetView.setVisibility(View.GONE);
         if (toastView   != null) toastView.setVisibility(View.GONE);
         if (expiredView != null) expiredView.setVisibility(View.GONE);
-
         webViewManager.destroyAll();
         isShowingTimeOverlay = false;
-        firebaseManager.removeBayarStatusListener();
         audioManager.stopAlarm();
-        // sleepView TIDAK di-remove di sini — biarkan layar tetap gelap
-        // sampai operator klik Wake manual
     }
 
     // =========================================================
-    // BAYAR OVERLAY (v1.9 — langsung inline WebView)
+    // BAYAR OVERLAY
     // =========================================================
 
     private void showBayarOverlay(final String bayarStatusInit) {
         currentBayarStatus = bayarStatusInit != null ? bayarStatusInit : "belum";
-        mainHandler.post(new Runnable() {
-            @Override public void run() {
-                try {
-                    if (bayarOverlayWv != null) {
-                        try { windowManager.removeView(bayarOverlayWv); } catch (Exception ignored) {}
-                        bayarOverlayWv = null;
-                    }
-                    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
-                        WindowManager.LayoutParams.MATCH_PARENT,
-                        WindowManager.LayoutParams.WRAP_CONTENT,
-                        getOverlayType(),
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                        PixelFormat.TRANSLUCENT
-                    );
-                    p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-                    p.x = 0; p.y = 4;
-                    android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
-                    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                    wv.getSettings().setJavaScriptEnabled(true);
-                    wv.loadUrl("file:///android_asset/bayaroverlay.html?bayarStatus=" + currentBayarStatus);
-                    bayarOverlayWv = wv;
-                    try { windowManager.addView(bayarOverlayWv, p); } catch (Exception ignored) {}
-                } catch (Exception e) {
-                    Log.e(TAG, "showBayarOverlay error: " + e.getMessage());
+        mainHandler.post(() -> {
+            try {
+                if (bayarOverlayWv != null) {
+                    try { windowManager.removeView(bayarOverlayWv); } catch (Exception ignored) {}
+                    bayarOverlayWv = null;
                 }
+                WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    getOverlayType(),
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT
+                );
+                p.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+                p.x = 0; p.y = 4;
+                android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
+                wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                wv.getSettings().setJavaScriptEnabled(true);
+                wv.loadUrl("file:///android_asset/bayaroverlay.html?bayarStatus=" + currentBayarStatus);
+                bayarOverlayWv = wv;
+                try { windowManager.addView(bayarOverlayWv, p); } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Log.e(TAG, "showBayarOverlay error: " + e.getMessage());
             }
         });
-        // Listen perubahan bayarStatus dari Firebase realtime
-        com.google.firebase.database.FirebaseDatabase fbDb = firebaseManager.getDb();
-        if (fbDb != null) {
-            if (bayarStatusRef != null && bayarStatusListener != null) {
-                bayarStatusRef.removeEventListener(bayarStatusListener);
-            }
-            bayarStatusRef = fbDb.getReference("settings/activeSessions/" + tvNum + "/bayarStatusOverlay");
-            bayarStatusListener = new com.google.firebase.database.ValueEventListener() {
-                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
-                    final String status = snap.exists() && snap.getValue() != null
-                            ? snap.getValue(String.class) : "belum";
-                    currentBayarStatus = status;
-                    mainHandler.post(new Runnable() {
-                        @Override public void run() {
-                            if (bayarOverlayWv != null) {
-                                bayarOverlayWv.evaluateJavascript("updateStatus('" + status + "')", null);
-                            }
-                        }
-                    });
-                }
-                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {}
-            };
-            bayarStatusRef.addValueEventListener(bayarStatusListener);
-        }
     }
 
     private void hideBayarOverlay() {
-        if (bayarStatusRef != null && bayarStatusListener != null) {
-            bayarStatusRef.removeEventListener(bayarStatusListener);
-            bayarStatusListener = null;
-            bayarStatusRef = null;
-        }
-        mainHandler.post(new Runnable() {
-            @Override public void run() {
-                try {
-                    if (bayarOverlayWv != null) {
-                        windowManager.removeView(bayarOverlayWv);
-                        bayarOverlayWv = null;
-                    }
-                } catch (Exception ignored) {}
-            }
+        mainHandler.post(() -> {
+            try {
+                if (bayarOverlayWv != null) {
+                    windowManager.removeView(bayarOverlayWv);
+                    bayarOverlayWv = null;
+                }
+            } catch (Exception ignored) {}
         });
     }
 
     // =========================================================
-    // TIME OVERLAY (v1.9 — langsung inline WebView)
+    // TIME OVERLAY
     // =========================================================
 
     private void showTimeOverlay() {
         if (isShowingTimeOverlay) return;
         isShowingTimeOverlay = true;
-        final String modeVal   = sessionManager.getMode() != null ? sessionManager.getMode() : "countdown";
-        final boolean isPaused = sessionManager.isPaused();
-        final long duration    = sessionManager.getDuration();
-        // Gunakan sessionManager sebagai single source of truth — sama persis dengan widget pojok kanan
-        final long totalSec, sisaMs;
+        final String  modeVal   = sessionManager.getMode() != null ? sessionManager.getMode() : "countdown";
+        final boolean isPaused  = sessionManager.isPaused();
+        final long    totalSec  = sessionManager.getDuration();
+        final long    sisaMs;
         if ("billing".equals(modeVal)) {
-            totalSec = 0;
-            sisaMs   = sessionManager.getElapsedSeconds() * 1000L;
+            sisaMs = sessionManager.getElapsedSeconds() * 1000L;
         } else {
-            totalSec = duration;
-            // getRemainingSeconds() sudah pakai serverTimeOffset yang sama dengan widget
-            sisaMs   = Math.max(0, sessionManager.getRemainingSeconds() * 1000L);
+            sisaMs = Math.max(0, sessionManager.getRemainingSeconds() * 1000L);
         }
-        mainHandler.post(new Runnable() {
-            @Override public void run() {
-                try {
-                    if (timeOverlayWv != null) {
-                        try { windowManager.removeView(timeOverlayWv); } catch (Exception ignored) {}
-                        try { timeOverlayWv.destroy(); } catch (Exception ignored) {}
-                        timeOverlayWv = null;
-                    }
-                    try { Thread.sleep(50); } catch (Exception ignored) {}
-                    WindowManager.LayoutParams p = new WindowManager.LayoutParams(
-                        WindowManager.LayoutParams.MATCH_PARENT,
-                        WindowManager.LayoutParams.WRAP_CONTENT,
-                        getOverlayType(),
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                        PixelFormat.TRANSLUCENT
-                    );
-                    p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-                    p.y = 0;
-                    android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
-                    wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                    wv.getSettings().setJavaScriptEnabled(true);
-                    wv.getSettings().setDomStorageEnabled(true);
-                    // sisaSec = sisa detik presisi desimal, dihitung dari sessionManager
-                    String url = "file:///android_asset/timeoverlay.html"
-                        + "?mode="     + android.net.Uri.encode(modeVal)
-                        + "&tvNum="    + tvNum
-                        + "&totalSec=" + Math.max(0, totalSec)
-                        + "&sisaSec="  + (sisaMs / 1000.0)
-                        + "&paused="   + (isPaused ? "1" : "0");
-                    wv.loadUrl(url);
-                    timeOverlayWv = wv;
-                    try { windowManager.addView(timeOverlayWv, p); } catch (Exception ignored) {}
-                    mainHandler.postDelayed(new Runnable() {
-                        @Override public void run() {
-                            try {
-                                if (timeOverlayWv != null) {
-                                    windowManager.removeView(timeOverlayWv);
-                                    timeOverlayWv.destroy();
-                                    timeOverlayWv = null;
-                                }
-                            } catch (Exception ignored) {}
-                            isShowingTimeOverlay = false;
-                        }
-                    }, 5500);
-                } catch (Exception e) {
-                    Log.e(TAG, "showTimeOverlay error: " + e.getMessage());
-                    isShowingTimeOverlay = false;
+        mainHandler.post(() -> {
+            try {
+                if (timeOverlayWv != null) {
+                    try { windowManager.removeView(timeOverlayWv); } catch (Exception ignored) {}
+                    try { timeOverlayWv.destroy(); } catch (Exception ignored) {}
+                    timeOverlayWv = null;
                 }
+                try { Thread.sleep(50); } catch (Exception ignored) {}
+                WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    getOverlayType(),
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT
+                );
+                p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                p.y = 0;
+                android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
+                wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                wv.getSettings().setJavaScriptEnabled(true);
+                wv.getSettings().setDomStorageEnabled(true);
+                String url = "file:///android_asset/timeoverlay.html"
+                    + "?mode="     + android.net.Uri.encode(modeVal)
+                    + "&tvNum="    + tvNum
+                    + "&totalSec=" + Math.max(0, totalSec)
+                    + "&sisaSec="  + (sisaMs / 1000.0)
+                    + "&paused="   + (isPaused ? "1" : "0");
+                wv.loadUrl(url);
+                timeOverlayWv = wv;
+                try { windowManager.addView(timeOverlayWv, p); } catch (Exception ignored) {}
+                mainHandler.postDelayed(() -> {
+                    try {
+                        if (timeOverlayWv != null) {
+                            windowManager.removeView(timeOverlayWv);
+                            timeOverlayWv.destroy();
+                            timeOverlayWv = null;
+                        }
+                    } catch (Exception ignored) {}
+                    isShowingTimeOverlay = false;
+                }, 5500);
+            } catch (Exception e) {
+                Log.e(TAG, "showTimeOverlay error: " + e.getMessage());
+                isShowingTimeOverlay = false;
             }
         });
     }
@@ -758,7 +511,6 @@ public class OverlayService extends Service {
             black.setBackgroundColor(Color.BLACK);
             sleepView = black;
             windowManager.addView(sleepView, makeFullscreenParams(PixelFormat.OPAQUE));
-            Log.d(TAG, "showSleep OK");
         } catch (Exception e) { Log.e(TAG, "showSleep: " + e.getMessage(), e); }
     }
 
@@ -826,60 +578,6 @@ public class OverlayService extends Service {
         try { tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null,
                   "w" + System.currentTimeMillis());
         } catch (Exception e) { Log.e(TAG, "speak: " + e.getMessage()); }
-    }
-
-    // =========================================================
-    // UPDATE BROADCAST
-    // =========================================================
-
-    private com.google.firebase.database.DatabaseReference  globalUpdateRef      = null;
-    private com.google.firebase.database.ValueEventListener globalUpdateListener = null;
-
-    private void checkGlobalUpdate() {
-        android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        String apiKey    = prefs.getString("apiKey", "");
-        String dbUrl     = prefs.getString("dbUrl", "");
-        String projectId = prefs.getString("projectId", "");
-        if (apiKey.isEmpty() || dbUrl.isEmpty()) return;
-        try {
-            com.google.firebase.FirebaseApp app;
-            try { app = com.google.firebase.FirebaseApp.getInstance("_tv_overlay"); }
-            catch (Exception e) { return; } // sudah diinit di FirebaseManager.init()
-
-            if (globalUpdateRef != null && globalUpdateListener != null)
-                globalUpdateRef.removeEventListener(globalUpdateListener);
-
-            globalUpdateRef = com.google.firebase.database.FirebaseDatabase
-                .getInstance(app).getReference("settings/globalUpdate");
-
-            globalUpdateListener = new com.google.firebase.database.ValueEventListener() {
-                @Override public void onDataChange(com.google.firebase.database.DataSnapshot snap) {
-                    if (!snap.exists() || !Boolean.TRUE.equals(snap.child("enabled").getValue(Boolean.class))) {
-                        sendBroadcast(new Intent("com.astrophile.tvoverlay.UPDATE_CLEAR")); return;
-                    }
-                    String minVer = snap.child("minVersion").getValue(String.class);
-                    String url    = snap.child("url").getValue(String.class);
-                    String msg    = snap.child("message").getValue(String.class);
-                    if (minVer == null || minVer.isEmpty()) return;
-                    try {
-                        String cur = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                        if (isVersionLower(cur, minVer)) broadcastUpdate("v" + minVer, url, msg);
-                    } catch (Exception e) { Log.e(TAG, "version check: " + e.getMessage()); }
-                }
-                @Override public void onCancelled(com.google.firebase.database.DatabaseError e) {
-                    Log.e(TAG, "globalUpdateListener: " + e.getMessage());
-                }
-            };
-            globalUpdateRef.addValueEventListener(globalUpdateListener);
-        } catch (Exception e) { Log.e(TAG, "checkGlobalUpdate: " + e.getMessage(), e); }
-    }
-
-    private void broadcastUpdate(String version, String url, String message) {
-        Intent i = new Intent("com.astrophile.tvoverlay.UPDATE_AVAILABLE");
-        i.putExtra("version", version != null ? version : "");
-        i.putExtra("url",     url     != null ? url     : "");
-        i.putExtra("message", message != null ? message : "");
-        sendBroadcast(i);
     }
 
     // =========================================================
@@ -960,161 +658,26 @@ public class OverlayService extends Service {
         catch (Exception e) { Log.e(TAG, "removeView [" + name + "]: " + e.getMessage(), e); }
     }
 
-    private int getCurrentVersionCode() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                return (int) getPackageManager().getPackageInfo(getPackageName(),
-                    android.content.pm.PackageManager.PackageInfoFlags.of(0)).getLongVersionCode();
-            return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
-        } catch (Exception e) { return -1; }
-    }
-
-    private boolean isVersionLower(String cur, String min) {
-        try {
-            String[] c = cur.split("[.\\-]"), m = min.split("[.\\-]");
-            for (int i = 0; i < Math.max(c.length, m.length); i++) {
-                int cv = i < c.length ? Integer.parseInt(c[i].replaceAll("[^0-9]","0")) : 0;
-                int mv = i < m.length ? Integer.parseInt(m[i].replaceAll("[^0-9]","0")) : 0;
-                if (cv < mv) return true; if (cv > mv) return false;
-            }
-        } catch (Exception e) { Log.e(TAG, "isVersionLower: " + e.getMessage()); }
-        return false;
-    }
-
     private String formatTime(long secs) {
         long h = secs/3600, m = (secs%3600)/60, s = secs%60;
-        return h > 0 ? String.format(Locale.US,"%d:%02d:%02d",h,m,s)
-                     : String.format(Locale.US,"%02d:%02d",m,s);
+        return h > 0 ? String.format(Locale.US, "%d:%02d:%02d", h, m, s)
+                     : String.format(Locale.US, "%02d:%02d", m, s);
     }
 
-    // ── Handle perintah dari kasir via HTTP LAN (mode offline) ────────────────
-    private void handleLocalCommand(JSONObject p) {
-        try {
-            // ── 1. Cek apakah ini perintah setMode ──
-            String action = p.optString("_action", "");
-            if ("setMode".equals(action)) {
-                String connMode = p.optString("mode", "online");
-                handleSetMode(connMode);
-                return;
-            }
-
-            // ── 2. Cek apakah ini TV control command (sleep/wake/showtime/dll) ──
-            // Kasir kirim { _cmd: "sleep", updatedAt: ... } via LAN saat mode offline
-            String tvCmd = p.optString("_cmd", "");
-            if (!tvCmd.isEmpty()) {
-                Log.d(TAG, "handleLocalCommand _cmd=" + tvCmd);
-                switch (tvCmd) {
-                    case "sleep":
-                        showSleep();
-                        break;
-                    case "wake":
-                        hideSleep();
-                        break;
-                    case "showtime":
-                        showTimeOverlay();
-                        break;
-                    case "showbayar":
-                        String bs = p.optString("bayarStatus", currentBayarStatus);
-                        showBayarOverlay(bs != null ? bs : "belum");
-                        break;
-                    case "hidebayar":
-                        hideBayarOverlay();
-                        break;
-                    default:
-                        Log.w(TAG, "handleLocalCommand: unknown _cmd=" + tvCmd);
-                }
-                return;
-            }
-
-            // ── 3. Payload sesi (billing/countdown) ──
-            // Sama persis dengan struktur Firebase activeSessions
-            boolean active   = p.optBoolean("active", false);
-            boolean expired  = p.optBoolean("expired", false);
-            String  mode     = p.optString("mode", "countdown");
-            long    start    = p.optLong("start", 0);
-            long    duration = p.optLong("duration", 0);
-            long    pausedAt = p.optLong("pausedAt", 0);
-            String  namaP    = p.optString("namaPelanggan", "");
-
-            // Gunakan SessionManager — sama persis dengan flow Firebase
-            sessionManager.applyFromLocal(active, expired, mode, start, duration,
-                pausedAt, namaP);
-
-            Log.d(TAG, "handleLocalCommand: active=" + active + " mode=" + mode
-                + " expired=" + expired + " start=" + start);
-        } catch (Exception e) {
-            Log.e(TAG, "handleLocalCommand error: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Handle switch mode Online/Offline dari kasir.
-     * Offline → stop listen Firebase, hanya terima perintah dari LAN.
-     * Online  → mulai listen Firebase kembali.
-     */
-    private void handleSetMode(String mode) {
-        Log.i(TAG, "handleSetMode: " + mode);
-        if ("offline".equals(mode)) {
-            // Stop Firebase session listener — cegah override data LAN
-            firebaseManager.removeSessionListener();
-            Log.i(TAG, "Mode OFFLINE — Firebase listener dimatikan");
-        } else {
-            // Restart Firebase session listener
-            firebaseManager.listenSession(tvNum, new FirebaseManager.SessionDataCallback() {
-                @Override public void onData(com.google.firebase.database.DataSnapshot snap) {
-                    mainHandler.post(() -> handleFirebaseData(snap));
-                }
-                @Override public void onCancelled(String error) {
-                    Log.e(TAG, "listenSession cancelled: " + error);
-                }
-            });
-            Log.i(TAG, "Mode ONLINE — Firebase listener dinyalakan kembali");
-        }
-    }
-
-    /** Ambil IP lokal WiFi device ini — ditampilkan di SetupActivity */
     public static String getLocalIpAddress() {
         try {
-            java.util.Enumeration<NetworkInterface> nets =
-                NetworkInterface.getNetworkInterfaces();
+            java.util.Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
             while (nets.hasMoreElements()) {
                 NetworkInterface ni = nets.nextElement();
                 if (ni.isLoopback() || !ni.isUp()) continue;
                 java.util.Enumeration<InetAddress> addrs = ni.getInetAddresses();
                 while (addrs.hasMoreElements()) {
                     InetAddress addr = addrs.nextElement();
-                    if (!addr.isLoopbackAddress()
-                            && addr instanceof java.net.Inet4Address) {
+                    if (!addr.isLoopbackAddress() && addr instanceof java.net.Inet4Address)
                         return addr.getHostAddress();
-                    }
                 }
             }
         } catch (Exception e) { Log.e("OverlayService", "getLocalIpAddress: " + e); }
         return "0.0.0.0";
     }
-
-
-    // ── Heartbeat — update lastSeen tiap 60 detik agar kasir tahu TV masih hidup ──
-    private void startHeartbeat() {
-        stopHeartbeat();
-        heartbeatTimer = new java.util.Timer("heartbeat", true);
-        heartbeatTimer.scheduleAtFixedRate(new java.util.TimerTask() {
-            @Override public void run() {
-                try {
-                    firebaseManager.setLastSeen(tvNum, System.currentTimeMillis());
-                } catch (Exception e) {
-                    Log.w(TAG, "heartbeat error: " + e.getMessage());
-                }
-            }
-        }, 60_000L, 60_000L);
-        Log.d(TAG, "Heartbeat started");
-    }
-
-    private void stopHeartbeat() {
-        if (heartbeatTimer != null) {
-            heartbeatTimer.cancel();
-            heartbeatTimer = null;
-        }
-    }
-
 }
