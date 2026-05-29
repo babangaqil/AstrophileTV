@@ -188,8 +188,10 @@ public class OverlayService extends Service {
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         tvNum  = prefs.getInt("tvNum", 1);
         tvName = prefs.getString("tvName", "TV " + tvNum);
+        String namaToko = prefs.getString("namaToko", "ASTROPHILE");
         sessionManager.setTvNum(tvNum);
         sessionManager.setTvName(tvName);
+        sessionManager.setNamaToko(namaToko);
 
         startTicker();
         initTTS();

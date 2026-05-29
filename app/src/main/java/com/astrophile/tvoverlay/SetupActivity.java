@@ -24,7 +24,7 @@ public class SetupActivity extends AppCompatActivity {
     private static final int    REQUEST_OVERLAY = 1001;
     private static final String PREFS           = "astro_tv_prefs";
 
-    private EditText etTvNum, etTvName;
+    private EditText etTvNum, etTvName, etNamaToko;
     private Button   btnConnect;
     private TextView tvStatus;
 
@@ -44,6 +44,7 @@ public class SetupActivity extends AppCompatActivity {
 
         etTvNum    = findViewById(R.id.etTvNum);
         etTvName   = findViewById(R.id.etTvName);
+        etNamaToko = findViewById(R.id.etNamaToko);
         btnConnect = findViewById(R.id.btnConnect);
         tvStatus   = findViewById(R.id.tvStatus);
 
@@ -68,6 +69,8 @@ public class SetupActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         etTvNum.setText(String.valueOf(prefs.getInt("tvNum", 1)));
         etTvName.setText(prefs.getString("tvName", ""));
+        if (etNamaToko != null)
+            etNamaToko.setText(prefs.getString("namaToko", ""));
 
         btnConnect.setOnClickListener(v -> connectAndStart());
 
@@ -91,19 +94,23 @@ public class SetupActivity extends AppCompatActivity {
     }
 
     private void connectAndStart() {
-        String tvNumStr = etTvNum.getText().toString().trim();
-        String tvName   = etTvName.getText().toString().trim();
+        String tvNumStr  = etTvNum.getText().toString().trim();
+        String tvName    = etTvName.getText().toString().trim();
+        String namaToko  = etNamaToko != null ? etNamaToko.getText().toString().trim() : "";
 
         int tvNum = 1;
         try { tvNum = Integer.parseInt(tvNumStr); } catch (Exception ignored) {}
-        if (tvName.isEmpty()) tvName = "TV " + tvNum;
+        if (tvName.isEmpty())   tvName   = "TV " + tvNum;
+        if (namaToko.isEmpty()) namaToko = "ASTROPHILE";
 
-        final int    finalTvNum  = tvNum;
-        final String finalTvName = tvName;
+        final int    finalTvNum   = tvNum;
+        final String finalTvName  = tvName;
+        final String finalNamaToko = namaToko;
 
         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
             .putInt("tvNum", finalTvNum)
             .putString("tvName", finalTvName)
+            .putString("namaToko", finalNamaToko)
             .apply();
 
         if (!hasOverlayPermission()) {
@@ -113,7 +120,7 @@ public class SetupActivity extends AppCompatActivity {
             stopService(new Intent(this, OverlayService.class));
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 startOverlayService();
-                showStatus("● Monitor Aktif | TV " + finalTvNum, "#00ff88");
+                showStatus("● Monitor Aktif | TV " + finalTvNum + " · " + finalNamaToko, "#00ff88");
             }, 800);
         }
     }
