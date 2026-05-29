@@ -2,25 +2,28 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#030508"
-    android:padding="24dp">
+    android:background="#03050c"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center_horizontal"
-        android:padding="8dp">
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="40dp"
+        android:paddingBottom="40dp">
 
-        <!-- Logo -->
+        <!-- ── Header ── -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="ASTROPHILE"
-            android:textSize="28sp"
+            android:textSize="30sp"
             android:textStyle="bold"
             android:textColor="#00f5ff"
-            android:letterSpacing="0.2"
+            android:letterSpacing="0.25"
             android:layout_marginBottom="4dp"/>
 
         <TextView
@@ -28,40 +31,42 @@
             android:layout_height="wrap_content"
             android:text="TV MONITOR · SETUP"
             android:textSize="10sp"
-            android:textColor="#4060a0"
+            android:textColor="#2a4a70"
             android:letterSpacing="0.3"
-            android:layout_marginBottom="32dp"/>
+            android:layout_marginBottom="8dp"/>
 
-        <!-- Card -->
+        <!-- IP Badge -->
+        <TextView
+            android:id="@+id/tvIpInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#00cc66"
+            android:background="#081810"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:layout_marginBottom="28dp"
+            android:visibility="gone"/>
+
+        <!-- ── Main Card ── -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/card_bg"
-            android:padding="24dp"
-            android:maxWidth="480dp">
+            android:padding="20dp"
+            android:layout_marginBottom="12dp">
 
-            <!-- Firebase config info (otomatis dari license) -->
-            <TextView
-                android:id="@+id/tvFbInfo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="11sp"
-                android:textColor="#00f5ff"
-                android:background="#0a1e38"
-                android:padding="10dp"
-                android:layout_marginBottom="16dp"
-                android:visibility="gone"
-                android:gravity="center"/>
-
-            <!-- TV Number & Name Row -->
+            <!-- Nomor TV + Nama TV -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:layout_marginBottom="14dp">
 
+                <!-- Nomor TV -->
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -72,32 +77,34 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="NOMOR TV INI"
+                        android:text="NOMOR TV"
                         android:textSize="9sp"
-                        android:textColor="#5a80a8"
+                        android:textColor="#3a5a80"
                         android:letterSpacing="0.2"
                         android:layout_marginBottom="6dp"/>
 
                     <EditText
                         android:id="@+id/etTvNum"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="48dp"
                         android:hint="1"
-                        android:textColorHint="#3a5070"
-                        android:textColor="#e8f4ff"
-                        android:textSize="16sp"
+                        android:textColorHint="#2a3a50"
+                        android:textColor="#e0f4ff"
+                        android:textSize="18sp"
                         android:textStyle="bold"
                         android:background="@drawable/input_bg"
-                        android:padding="12dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
                         android:gravity="center"
                         android:inputType="number"
                         android:singleLine="true"/>
                 </LinearLayout>
 
+                <!-- Nama TV -->
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_weight="2"
                     android:orientation="vertical"
                     android:layout_marginStart="8dp">
 
@@ -106,20 +113,21 @@
                         android:layout_height="wrap_content"
                         android:text="NAMA TV"
                         android:textSize="9sp"
-                        android:textColor="#5a80a8"
+                        android:textColor="#3a5a80"
                         android:letterSpacing="0.2"
                         android:layout_marginBottom="6dp"/>
 
                     <EditText
                         android:id="@+id/etTvName"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="48dp"
                         android:hint="TV 1"
-                        android:textColorHint="#3a5070"
-                        android:textColor="#e8f4ff"
+                        android:textColorHint="#2a3a50"
+                        android:textColor="#e0f4ff"
                         android:textSize="14sp"
                         android:background="@drawable/input_bg"
-                        android:padding="12dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
                         android:gravity="center"
                         android:inputType="text"
                         android:singleLine="true"/>
@@ -132,89 +140,40 @@
                 android:layout_height="wrap_content"
                 android:text="NAMA TOKO"
                 android:textSize="9sp"
-                android:textColor="#5a80a8"
+                android:textColor="#3a5a80"
                 android:letterSpacing="0.2"
-                android:layout_marginTop="12dp"
                 android:layout_marginBottom="6dp"/>
 
             <EditText
                 android:id="@+id/etNamaToko"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="48dp"
                 android:hint="ASTROPHILE"
-                android:textColorHint="#3a5070"
-                android:textColor="#e8f4ff"
+                android:textColorHint="#2a3a50"
+                android:textColor="#e0f4ff"
                 android:textSize="14sp"
                 android:background="@drawable/input_bg"
-                android:padding="12dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
                 android:gravity="center"
                 android:inputType="textCapCharacters"
-                android:singleLine="true"/>
+                android:singleLine="true"
+                android:layout_marginBottom="20dp"/>
 
             <!-- Connect Button -->
             <Button
                 android:id="@+id/btnConnect"
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
+                android:layout_height="54dp"
                 android:text="⚡  HUBUNGKAN &amp; MULAI MONITOR"
                 android:textColor="#00f5ff"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.15"
                 android:background="@drawable/btn_connect_bg"
-                android:layout_marginBottom="12dp"/>
+                android:layout_marginBottom="14dp"/>
 
             <!-- Status -->
-        <!-- IP TV untuk mode offline kasir -->
-        <TextView
-            android:id="@+id/tvIpInfo"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:textColor="#00ff88"
-            android:background="#0a1e18"
-            android:padding="10dp"
-            android:gravity="center"
-            android:layout_marginBottom="8dp"
-            android:visibility="gone"/>
-
-        <!-- Toggle Online / Offline -->
-        <LinearLayout
-            android:id="@+id/layoutModeToggle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="#0a1020"
-            android:padding="12dp"
-            android:layout_marginBottom="8dp">
-
-            <TextView
-                android:id="@+id/tvModeLabel"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textSize="13sp"
-                android:textColor="#00f5ff"
-                android:fontFamily="monospace"
-                android:text="🌐 Mode Online (Firebase)"/>
-
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/switchOfflineMode"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="false"/>
-
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/tvDeviceInfo"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="10sp"
-            android:textColor="#336688"
-            android:gravity="center"
-            android:visibility="gone"/>
             <TextView
                 android:id="@+id/tvStatus"
                 android:layout_width="match_parent"
@@ -225,64 +184,53 @@
                 android:gravity="center"
                 android:minHeight="20dp"/>
 
+            <!-- Device Info (HW ID, versi) -->
+            <TextView
+                android:id="@+id/tvDeviceInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="9sp"
+                android:textColor="#1e3a50"
+                android:gravity="center"
+                android:layout_marginTop="6dp"
+                android:visibility="gone"/>
+
         </LinearLayout>
 
-        <!-- Update Button — muncul saat ada versi baru -->
-        <Button
-            android:id="@+id/btnUpdate"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:text="⬇  UPDATE TERSEDIA — KETUK UNTUK UPDATE"
-            android:textColor="#000000"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.1"
-            android:backgroundTint="#ffcc00"
-            android:layout_marginTop="12dp"
-            android:visibility="gone"/>
-
-        <TextView
-            android:id="@+id/tvUpdateInfo"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textSize="9sp"
-            android:textColor="#ffcc00"
-            android:gravity="center"
-            android:layout_marginTop="4dp"
-            android:visibility="gone"/>
-
+        <!-- ── Download Update Button ── -->
         <Button
             android:id="@+id/btnDownloadUpdate"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="50dp"
             android:text="⬇  DOWNLOAD UPDATE TERBARU"
             android:textColor="#00f5ff"
             android:textSize="10sp"
             android:textStyle="bold"
             android:letterSpacing="0.1"
-            android:backgroundTint="#0a1a2a"
-            android:layout_marginTop="12dp"/>
+            android:backgroundTint="#080e1c"
+            android:layout_marginBottom="8dp"/>
 
+        <!-- ── Force Stop Button ── -->
         <Button
             android:id="@+id/btnForceStop"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="50dp"
             android:text="⏹  PAKSA BERHENTI APLIKASI"
             android:textColor="#ff4d6d"
             android:textSize="10sp"
             android:textStyle="bold"
             android:letterSpacing="0.1"
-            android:backgroundTint="#1a0a10"
-            android:layout_marginTop="12dp"/>
+            android:backgroundTint="#120408"
+            android:layout_marginBottom="16dp"/>
 
+        <!-- Footer note -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Config tersimpan otomatis"
-            android:textSize="10sp"
-            android:textColor="#1a2a40"
-            android:layout_marginTop="16dp"/>
+            android:text="Config tersimpan otomatis · LAN Only"
+            android:textSize="9sp"
+            android:textColor="#0e1e30"
+            android:letterSpacing="0.1"/>
 
     </LinearLayout>
 </ScrollView>
