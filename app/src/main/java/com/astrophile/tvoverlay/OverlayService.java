@@ -201,6 +201,8 @@ public class OverlayService extends Service {
         try {
             localHttpServer = new LocalHttpServer(payload ->
                 mainHandler.post(() -> handleLocalCommand(payload)));
+            localHttpServer.setPingListener(() ->
+                sendBroadcast(new Intent("com.astrophile.tvoverlay.KASIR_HIT")));
             localHttpServer.start();
             Log.i(TAG, "LocalHttpServer started on port " + LocalHttpServer.PORT);
         } catch (Exception e) {
