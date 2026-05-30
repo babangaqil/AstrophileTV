@@ -331,8 +331,6 @@ public class OverlayService extends Service {
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
 
-        audioManager.startAlarm();
-
         webViewManager.getOrCreateExpiredOverlay(
             "file:///android_asset/expired.html",
             () -> injectExpiredData(webViewManager.getExpiredOverlay())
