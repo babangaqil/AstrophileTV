@@ -378,6 +378,7 @@ public class OverlayService extends Service {
             if (!tvCmd.isEmpty()) {
                 Log.d(TAG, "handleLocalCommand _cmd=" + tvCmd);
                 switch (tvCmd) {
+                    case "ping":      /* hanya trigger KASIR_HIT broadcast, tidak ada aksi lain */ break;
                     case "sleep":     showSleep();    break;
                     case "wake":      hideSleep();    break;
                     case "showtime":  showTimeOverlay(); break;
