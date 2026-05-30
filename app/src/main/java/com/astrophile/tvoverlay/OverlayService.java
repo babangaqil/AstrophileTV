@@ -158,10 +158,28 @@ public class OverlayService extends Service {
             @Override public void onSessionStarted() {
                 mainHandler.post(() -> {
                     if (sessionManager.isExpired()) return;
+
+                    // ── Hard reset state sesi lama ─────────────────
                     stopWidgetCountDown();
                     webViewManager.destroyAll();
+                    audioManager.stopAlarm();
                     isShowingTimeOverlay = false;
+                    currentBayarStatus   = "belum";
+                    hideBayarOverlay();
+
+                    // Sembunyikan semua view lama
+                    if (widgetView  != null) widgetView.setVisibility(View.GONE);
+                    if (toastView   != null) toastView.setVisibility(View.GONE);
+                    if (expiredView != null) expiredView.setVisibility(View.GONE);
+
+                    // Reset toast flags agar warning menit ke-5 & ke-1 muncul lagi
+                    sessionManager.setToast5Shown(false);
+                    sessionManager.setToast1Shown(false);
+
+                    // Wake TV kalau lagi sleep
                     if (sleepView != null) hideSleep();
+
+                    // Mulai sesi baru
                     if (sessionManager.getStartTime() > 0) updateWidget();
                 });
             }
@@ -169,7 +187,13 @@ public class OverlayService extends Service {
                 mainHandler.post(() -> showExpiredOverlay());
             }
             @Override public void onSessionReset() {
-                mainHandler.post(() -> hideAll());
+                mainHandler.post(() -> {
+                    hideAll();
+                    hideBayarOverlay();
+                    currentBayarStatus = "belum";
+                    // Sesi bersih → TV masuk sleep
+                    mainHandler.postDelayed(() -> showSleep(), 500);
+                });
             }
         });
 
