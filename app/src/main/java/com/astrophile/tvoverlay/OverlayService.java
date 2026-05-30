@@ -310,12 +310,12 @@ public class OverlayService extends Service {
         }
 
         if (widgetCountDown == null) {
-            if (secs <= 60 && !sessionManager.isToast1Shown()) {
-                sessionManager.setToast1Shown(true);
-                speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
-            } else if (secs <= 300 && secs > 60 && !sessionManager.isToast5Shown()) {
+            if (secs == 300 && !sessionManager.isToast5Shown()) {
                 sessionManager.setToast5Shown(true);
                 speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
+            } else if (secs == 60 && !sessionManager.isToast1Shown()) {
+                sessionManager.setToast1Shown(true);
+                speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
             }
             startWidgetCountDown(secs * 1000L);
         }
