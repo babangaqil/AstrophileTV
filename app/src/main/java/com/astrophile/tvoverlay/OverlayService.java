@@ -199,10 +199,10 @@ public class OverlayService extends Service {
 
         // HTTP server LAN — satu-satunya sumber perintah kasir
         try {
-            localHttpServer = new LocalHttpServer(payload ->
-                mainHandler.post(() -> handleLocalCommand(payload)));
-            localHttpServer.setPingListener(() ->
-                sendBroadcast(new Intent("com.astrophile.tvoverlay.KASIR_HIT")));
+            localHttpServer = new LocalHttpServer(payload -> {
+                sendBroadcast(new Intent("com.astrophile.tvoverlay.KASIR_HIT"));
+                mainHandler.post(() -> handleLocalCommand(payload));
+            });
             localHttpServer.start();
             Log.i(TAG, "LocalHttpServer started on port " + LocalHttpServer.PORT);
         } catch (Exception e) {
