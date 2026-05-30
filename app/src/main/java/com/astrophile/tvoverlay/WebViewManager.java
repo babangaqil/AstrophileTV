@@ -246,6 +246,8 @@ public class WebViewManager {
         s.setMediaPlaybackRequiresUserGesture(false);
         // Hardware acceleration
         wv.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
+        // Cegah layar putih saat loading — background transparan dulu
+        wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         return wv;
     }
 
