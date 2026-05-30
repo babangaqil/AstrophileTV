@@ -383,8 +383,9 @@ public class OverlayService extends Service {
                     case "wake":      hideSleep();    break;
                     case "showtime":  showTimeOverlay(); break;
                     case "showbayar":
-                        String bs = p.optString("bayarStatus", currentBayarStatus);
-                        showBayarOverlay(bs != null ? bs : "belum");
+                        String bs = p.optString("bayarStatusOverlay", "");
+                        if (bs.isEmpty()) bs = p.optString("bayarStatus", currentBayarStatus);
+                        showBayarOverlay(bs.isEmpty() ? "belum" : bs);
                         break;
                     case "hidebayar": hideBayarOverlay(); break;
                     default: Log.w(TAG, "unknown _cmd=" + tvCmd);
