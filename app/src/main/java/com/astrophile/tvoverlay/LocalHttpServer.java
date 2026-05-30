@@ -23,6 +23,8 @@ public class LocalHttpServer {
     }
 
     private final CommandListener listener;
+    private Runnable pingListener;
+    public void setPingListener(Runnable r) { this.pingListener = r; }
     private ServerSocket serverSocket;
     private Thread       serverThread;
     private volatile boolean running = false;
@@ -97,6 +99,8 @@ public class LocalHttpServer {
                     sendResponse(out, "500 Internal Server Error", cors, "{\"ok\":false}");
                 }
             } else if (method.equals("GET") && path.equals("/ping")) {
+                // Broadcast ke SetupActivity bahwa kasir terhubung
+                if (pingListener != null) pingListener.run();
                 sendResponse(out, "200 OK", cors, "{\"ok\":true,\"server\":\"AstrophileTV\"}");
             } else {
                 sendResponse(out, "404 Not Found", cors, "{\"ok\":false,\"error\":\"not found\"}");
