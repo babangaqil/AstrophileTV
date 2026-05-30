@@ -55,21 +55,47 @@ public class SessionManager {
     public synchronized void applyFromLocal(boolean fbActive, boolean fbExpired, String fbMode,
             long fbStart, long fbDuration, long fbPausedAt, String fbNama) {
 
+        if (!fbActive) {
+            // Sesi dibersihkan dari kasir → reset semua
+            boolean wasActive = this.active;
+            this.active        = false;
+            this.expired       = false;
+            this.mode          = "";
+            this.startTime     = 0L;
+            this.duration      = 0L;
+            this.pausedAt      = 0L;
+            this.namaPelanggan = "";
+            this.toast5Shown   = false;
+            this.toast1Shown   = false;
+            if (wasActive && listener != null) listener.onSessionReset();
+            return;
+        }
+
+        // Deteksi apakah ini sesi baru (start berubah = pelanggan baru)
+        boolean isNewSession = (fbStart != this.startTime && fbStart > 0);
+
+        if (isNewSession) {
+            // Reset toast flags agar peringatan muncul lagi untuk pelanggan baru
+            this.toast5Shown = false;
+            this.toast1Shown = false;
+        }
+
         this.active        = fbActive;
         this.expired       = fbExpired;
-        this.mode          = fbMode  != null ? fbMode  : "";
+        this.mode          = fbMode != null ? fbMode : "";
         this.startTime     = fbStart;
         this.duration      = fbDuration;
-        this.namaPelanggan = fbNama  != null ? fbNama  : "";
+        this.namaPelanggan = fbNama != null ? fbNama : "";
         this.pausedAt      = fbPausedAt;
 
         Log.d(TAG, "applyFromLocal active=" + active + " mode=" + mode
-                + " start=" + startTime + " dur=" + duration);
+                + " start=" + startTime + " dur=" + duration
+                + " isNew=" + isNewSession);
 
         if (active && startTime > 0 && listener != null) {
             if (fbExpired) {
                 listener.onSessionExpired();
-            } else if (!this.expired) {
+            } else {
                 listener.onSessionStarted();
             }
         }
