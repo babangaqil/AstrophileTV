@@ -344,7 +344,7 @@ public class OverlayService extends Service {
     private void handleLocalCommand(JSONObject p) {
         // Broadcast ke SetupActivity bahwa kasir terhubung
         try {
-            sendBroadcast(new Intent(SetupActivity.ACTION_KASIR_HIT));
+            sendBroadcast(new Intent("com.astrophile.tvoverlay.KASIR_HIT"));
         } catch (Exception ignored) {}
 
         try {
