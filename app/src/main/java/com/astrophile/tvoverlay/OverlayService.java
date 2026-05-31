@@ -252,10 +252,9 @@ public class OverlayService extends Service {
 
         widgetCountDown = new android.os.CountDownTimer(sisaMs, 1000) {
             @Override public void onTick(long ms) {
-                // Jika flag auto-hide aktif dan sisa > 1 menit, sembunyikan dan stop
+                // Jika flag auto-hide aktif dan sisa > 1 menit, sembunyikan saja
                 if (widget5MinAutoHidden && ms / 1000 > 60) {
                     widgetView.setVisibility(View.GONE);
-                    stopWidgetCountDown();
                     return;
                 }
                 renderWidget(ms / 1000);
@@ -352,9 +351,8 @@ public class OverlayService extends Service {
             // Auto-hide widget 5 detik setelah muncul (04:55)
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                 if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
-                    widgetView.setVisibility(View.GONE);
-                    stopWidgetCountDown();
                     widget5MinAutoHidden = true;
+                    widgetView.setVisibility(View.GONE);
                 }
             }, 5000);
         } else if (secs <= 60 && secs >= 59 && !sessionManager.isToast1Shown()) {
