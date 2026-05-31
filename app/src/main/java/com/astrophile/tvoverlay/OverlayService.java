@@ -353,6 +353,7 @@ public class OverlayService extends Service {
                 if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
                     widget5MinAutoHidden = true;
                     widgetView.setVisibility(View.GONE);
+                    stopWidgetCountDown(); // stop setelah flag aktif agar onTick tidak restart
                 }
             }, 5000);
         } else if (secs <= 60 && secs >= 59 && !sessionManager.isToast1Shown()) {
@@ -361,10 +362,8 @@ public class OverlayService extends Service {
             speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
         }
 
-        if (widgetCountDown == null) {
-            if (!widget5MinAutoHidden) {
-                startWidgetCountDown(secs * 1000L);
-            }
+        if (widgetCountDown == null && !widget5MinAutoHidden) {
+            startWidgetCountDown(secs * 1000L);
         }
     }
 
