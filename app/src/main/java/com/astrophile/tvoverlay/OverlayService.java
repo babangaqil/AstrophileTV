@@ -61,6 +61,7 @@ public class OverlayService extends Service {
 
     // State
     private boolean isShowingTimeOverlay = false;
+    private boolean widget5MinAutoHidden  = false; // flag: widget sudah auto-hide di 5 menit
     private String  currentBayarStatus   = "belum";
 
     // TTS
@@ -175,6 +176,7 @@ public class OverlayService extends Service {
                     // Reset toast flags agar warning menit ke-5 & ke-1 muncul lagi
                     sessionManager.setToast5Shown(false);
                     sessionManager.setToast1Shown(false);
+                    widget5MinAutoHidden = false; // reset agar widget bisa muncul di sesi baru
 
                     // Wake TV kalau lagi sleep
                     if (sleepView != null) hideSleep();
@@ -266,6 +268,10 @@ public class OverlayService extends Service {
         }
     }
 
+    private void resetWidget5MinFlag() {
+        widget5MinAutoHidden = false;
+    }
+
     private void renderWidget(long secs) {
         if (widgetView == null) return;
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
@@ -313,18 +319,23 @@ public class OverlayService extends Service {
             if (secs == 300 && !sessionManager.isToast5Shown()) {
                 sessionManager.setToast5Shown(true);
                 speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
-                // Auto-hide widget setelah 5 detik (saat timer mencapai 04:55)
+                // Auto-hide widget tepat saat detik 04:55 (5 detik setelah muncul)
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
                         widgetView.setVisibility(View.GONE);
                         stopWidgetCountDown();
+                        widget5MinAutoHidden = true; // set flag agar tidak muncul lagi
                     }
                 }, 5000);
             } else if (secs == 60 && !sessionManager.isToast1Shown()) {
                 sessionManager.setToast1Shown(true);
+                widget5MinAutoHidden = false; // reset flag saat 1 menit — widget boleh muncul lagi
                 speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
             }
-            startWidgetCountDown(secs * 1000L);
+            // Jangan start countdown lagi jika sudah auto-hide di 5 menit
+            if (!widget5MinAutoHidden) {
+                startWidgetCountDown(secs * 1000L);
+            }
         }
     }
 
