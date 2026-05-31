@@ -251,7 +251,15 @@ public class OverlayService extends Service {
         if (sisaMs <= 0) return;
 
         widgetCountDown = new android.os.CountDownTimer(sisaMs, 1000) {
-            @Override public void onTick(long ms) { renderWidget(ms / 1000); }
+            @Override public void onTick(long ms) {
+                // Jika flag auto-hide aktif dan sisa > 1 menit, sembunyikan dan stop
+                if (widget5MinAutoHidden && ms / 1000 > 60) {
+                    widgetView.setVisibility(View.GONE);
+                    stopWidgetCountDown();
+                    return;
+                }
+                renderWidget(ms / 1000);
+            }
             @Override public void onFinish() {
                 renderWidget(0);
                 widgetView.setVisibility(View.GONE);
@@ -274,6 +282,11 @@ public class OverlayService extends Service {
 
     private void renderWidget(long secs) {
         if (widgetView == null) return;
+        // Jika flag auto-hide aktif dan sisa > 1 menit, jangan tampilkan
+        if (widget5MinAutoHidden && secs > 60) {
+            widgetView.setVisibility(View.GONE);
+            return;
+        }
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
