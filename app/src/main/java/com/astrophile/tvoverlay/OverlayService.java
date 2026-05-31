@@ -156,32 +156,34 @@ public class OverlayService extends Service {
         audioManager   = new AstroAudioManager();
 
         sessionManager.setListener(new SessionManager.SessionListener() {
-            @Override public void onSessionStarted() {
+            @Override public void onSessionStarted(boolean isNewSession) {
                 mainHandler.post(() -> {
                     if (sessionManager.isExpired()) return;
 
-                    // ── Hard reset state sesi lama ─────────────────
-                    stopWidgetCountDown();
-                    webViewManager.destroyAll();
-                    audioManager.stopAlarm();
-                    isShowingTimeOverlay = false;
-                    currentBayarStatus   = "belum";
-                    hideBayarOverlay();
+                    if (isNewSession) {
+                        // ── Hard reset state hanya untuk sesi baru ────────
+                        stopWidgetCountDown();
+                        webViewManager.destroyAll();
+                        audioManager.stopAlarm();
+                        isShowingTimeOverlay = false;
+                        currentBayarStatus   = "belum";
+                        hideBayarOverlay();
 
-                    // Sembunyikan semua view lama
-                    if (widgetView  != null) widgetView.setVisibility(View.GONE);
-                    if (toastView   != null) toastView.setVisibility(View.GONE);
-                    if (expiredView != null) expiredView.setVisibility(View.GONE);
+                        // Sembunyikan semua view lama
+                        if (widgetView  != null) widgetView.setVisibility(View.GONE);
+                        if (toastView   != null) toastView.setVisibility(View.GONE);
+                        if (expiredView != null) expiredView.setVisibility(View.GONE);
 
-                    // Reset toast flags agar warning menit ke-5 & ke-1 muncul lagi
-                    sessionManager.setToast5Shown(false);
-                    sessionManager.setToast1Shown(false);
-                    widget5MinAutoHidden = false; // reset agar widget bisa muncul di sesi baru
+                        // Reset flags hanya di sesi baru
+                        sessionManager.setToast5Shown(false);
+                        sessionManager.setToast1Shown(false);
+                        widget5MinAutoHidden = false;
 
-                    // Wake TV kalau lagi sleep
-                    if (sleepView != null) hideSleep();
+                        // Wake TV kalau lagi sleep
+                        if (sleepView != null) hideSleep();
+                    }
 
-                    // Mulai sesi baru
+                    // Update widget (sesi baru maupun Firebase sync)
                     if (sessionManager.getStartTime() > 0) updateWidget();
                 });
             }
