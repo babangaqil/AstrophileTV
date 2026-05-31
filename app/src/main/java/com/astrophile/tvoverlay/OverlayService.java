@@ -309,6 +309,17 @@ public class OverlayService extends Service {
 
         long secs = sessionManager.getRemainingSeconds();
 
+        // Jika flag auto-hide aktif dan sisa waktu masih > 1 menit, sembunyikan widget
+        if (widget5MinAutoHidden && secs > 60) {
+            widgetView.setVisibility(View.GONE);
+            return;
+        }
+
+        // Reset flag saat sisa <= 60 detik agar widget 1 menit bisa muncul
+        if (secs <= 60) {
+            widget5MinAutoHidden = false;
+        }
+
         if (sessionManager.isPaused()) {
             stopWidgetCountDown();
             renderWidget(secs);
@@ -324,15 +335,14 @@ public class OverlayService extends Service {
                     if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
                         widgetView.setVisibility(View.GONE);
                         stopWidgetCountDown();
-                        widget5MinAutoHidden = true; // set flag agar tidak muncul lagi
+                        widget5MinAutoHidden = true;
                     }
                 }, 5000);
             } else if (secs == 60 && !sessionManager.isToast1Shown()) {
                 sessionManager.setToast1Shown(true);
-                widget5MinAutoHidden = false; // reset flag saat 1 menit — widget boleh muncul lagi
+                widget5MinAutoHidden = false;
                 speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
             }
-            // Jangan start countdown lagi jika sudah auto-hide di 5 menit
             if (!widget5MinAutoHidden) {
                 startWidgetCountDown(secs * 1000L);
             }
