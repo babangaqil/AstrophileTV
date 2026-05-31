@@ -294,12 +294,18 @@ public class OverlayService extends Service {
         if (tvTime != null) tvTime.setText(formatTime(secs));
 
         if (secs <= 60) {
+            widget5MinAutoHidden = false;
             widgetView.setVisibility(View.VISIBLE);
             if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
             if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
             if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
         } else if (secs <= 300) {
-            widgetView.setVisibility(View.VISIBLE);
+            // Hanya tampilkan jika flag auto-hide belum aktif
+            if (!widget5MinAutoHidden) {
+                widgetView.setVisibility(View.VISIBLE);
+            } else {
+                widgetView.setVisibility(View.GONE);
+            }
             if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
             if (tvLabel != null) tvLabel.setText("SISA WAKTU");
             if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
