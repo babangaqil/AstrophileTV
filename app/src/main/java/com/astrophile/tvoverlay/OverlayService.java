@@ -345,23 +345,25 @@ public class OverlayService extends Service {
             return;
         }
 
+        // TTS & auto-hide: cek terlepas dari status widgetCountDown
+        if (secs <= 300 && secs >= 299 && !sessionManager.isToast5Shown()) {
+            sessionManager.setToast5Shown(true);
+            speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
+            // Auto-hide widget 5 detik setelah muncul (04:55)
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
+                    widgetView.setVisibility(View.GONE);
+                    stopWidgetCountDown();
+                    widget5MinAutoHidden = true;
+                }
+            }, 5000);
+        } else if (secs <= 60 && secs >= 59 && !sessionManager.isToast1Shown()) {
+            sessionManager.setToast1Shown(true);
+            widget5MinAutoHidden = false;
+            speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
+        }
+
         if (widgetCountDown == null) {
-            if (secs == 300 && !sessionManager.isToast5Shown()) {
-                sessionManager.setToast5Shown(true);
-                speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
-                // Auto-hide widget tepat saat detik 04:55 (5 detik setelah muncul)
-                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
-                        widgetView.setVisibility(View.GONE);
-                        stopWidgetCountDown();
-                        widget5MinAutoHidden = true;
-                    }
-                }, 5000);
-            } else if (secs == 60 && !sessionManager.isToast1Shown()) {
-                sessionManager.setToast1Shown(true);
-                widget5MinAutoHidden = false;
-                speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
-            }
             if (!widget5MinAutoHidden) {
                 startWidgetCountDown(secs * 1000L);
             }
