@@ -313,6 +313,13 @@ public class OverlayService extends Service {
             if (secs == 300 && !sessionManager.isToast5Shown()) {
                 sessionManager.setToast5Shown(true);
                 speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
+                // Auto-hide widget setelah 5 detik (saat timer mencapai 04:55)
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
+                        widgetView.setVisibility(View.GONE);
+                        stopWidgetCountDown();
+                    }
+                }, 5000);
             } else if (secs == 60 && !sessionManager.isToast1Shown()) {
                 sessionManager.setToast1Shown(true);
                 speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
