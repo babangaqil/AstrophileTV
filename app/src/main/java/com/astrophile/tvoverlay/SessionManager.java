@@ -28,7 +28,7 @@ public class SessionManager {
 
     // ── Listener ─────────────────────────────────────────────
     public interface SessionListener {
-        void onSessionStarted();
+        void onSessionStarted(boolean isNewSession);
         void onSessionExpired();
         void onSessionReset();
     }
@@ -96,7 +96,7 @@ public class SessionManager {
             if (fbExpired) {
                 listener.onSessionExpired();
             } else {
-                listener.onSessionStarted();
+                listener.onSessionStarted(isNewSession);
             }
         }
     }
