@@ -470,6 +470,7 @@ public class OverlayService extends Service {
     private void showTimeOverlay() {
         if (isShowingTimeOverlay) return;
         isShowingTimeOverlay = true;
+        speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
         final String  modeVal   = sessionManager.getMode() != null ? sessionManager.getMode() : "countdown";
         final boolean isPaused  = sessionManager.isPaused();
         final long    totalSec  = sessionManager.getDuration();
