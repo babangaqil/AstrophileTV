@@ -61,7 +61,6 @@ public class OverlayService extends Service {
 
     // State
     private boolean isShowingTimeOverlay = false;
-    private boolean widget5MinAutoHidden  = false; // flag: widget sudah auto-hide di 5 menit
     private String  currentBayarStatus   = "belum";
 
     // TTS
@@ -177,7 +176,6 @@ public class OverlayService extends Service {
                         // Reset flags hanya di sesi baru
                         sessionManager.setToast5Shown(false);
                         sessionManager.setToast1Shown(false);
-                        widget5MinAutoHidden = false;
 
                         // Wake TV kalau lagi sleep
                         if (sleepView != null) hideSleep();
@@ -254,11 +252,6 @@ public class OverlayService extends Service {
 
         widgetCountDown = new android.os.CountDownTimer(sisaMs, 1000) {
             @Override public void onTick(long ms) {
-                // Jika flag auto-hide aktif dan sisa > 1 menit, sembunyikan saja
-                if (widget5MinAutoHidden && ms / 1000 > 60) {
-                    widgetView.setVisibility(View.GONE);
-                    return;
-                }
                 renderWidget(ms / 1000);
             }
             @Override public void onFinish() {
@@ -277,17 +270,8 @@ public class OverlayService extends Service {
         }
     }
 
-    private void resetWidget5MinFlag() {
-        widget5MinAutoHidden = false;
-    }
-
     private void renderWidget(long secs) {
         if (widgetView == null) return;
-        // Jika flag auto-hide aktif dan sisa > 1 menit, jangan tampilkan
-        if (widget5MinAutoHidden && secs > 60) {
-            widgetView.setVisibility(View.GONE);
-            return;
-        }
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
@@ -295,21 +279,10 @@ public class OverlayService extends Service {
         if (tvTime != null) tvTime.setText(formatTime(secs));
 
         if (secs <= 60) {
-            widget5MinAutoHidden = false;
             widgetView.setVisibility(View.VISIBLE);
             if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ff1a50"));
             if (tvLabel != null) tvLabel.setText("SEGERA HABIS!");
             if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_danger);
-        } else if (secs <= 300) {
-            // Hanya tampilkan jika flag auto-hide belum aktif
-            if (!widget5MinAutoHidden) {
-                widgetView.setVisibility(View.VISIBLE);
-            } else {
-                widgetView.setVisibility(View.GONE);
-            }
-            if (tvTime  != null) tvTime.setTextColor(Color.parseColor("#ffcc00"));
-            if (tvLabel != null) tvLabel.setText("SISA WAKTU");
-            if (bgView  != null) bgView.setBackgroundResource(R.drawable.widget_bg_warning);
         } else {
             widgetView.setVisibility(View.GONE);
         }
@@ -329,42 +302,18 @@ public class OverlayService extends Service {
 
         long secs = sessionManager.getRemainingSeconds();
 
-        // Jika flag auto-hide aktif dan sisa waktu masih > 1 menit, sembunyikan widget
-        if (widget5MinAutoHidden && secs > 60) {
-            widgetView.setVisibility(View.GONE);
-            return;
-        }
-
-        // Reset flag saat sisa <= 60 detik agar widget 1 menit bisa muncul
-        if (secs <= 60) {
-            widget5MinAutoHidden = false;
-        }
-
         if (sessionManager.isPaused()) {
             stopWidgetCountDown();
             renderWidget(secs);
             return;
         }
 
-        // TTS & auto-hide: cek terlepas dari status widgetCountDown
-        if (secs <= 300 && secs >= 299 && !sessionManager.isToast5Shown()) {
-            sessionManager.setToast5Shown(true);
-            speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
-            // Auto-hide widget 5 detik setelah muncul (04:55)
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                if (widgetView != null && sessionManager.getRemainingSeconds() > 60) {
-                    widget5MinAutoHidden = true;
-                    widgetView.setVisibility(View.GONE);
-                    stopWidgetCountDown(); // stop setelah flag aktif agar onTick tidak restart
-                }
-            }, 5000);
-        } else if (secs <= 60 && secs >= 59 && !sessionManager.isToast1Shown()) {
+        if (secs <= 60 && secs >= 59 && !sessionManager.isToast1Shown()) {
             sessionManager.setToast1Shown(true);
-            widget5MinAutoHidden = false;
             speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
         }
 
-        if (widgetCountDown == null && !widget5MinAutoHidden) {
+        if (widgetCountDown == null) {
             startWidgetCountDown(secs * 1000L);
         }
     }
