@@ -520,7 +520,7 @@ public class OverlayService extends Service {
                         }
                     } catch (Exception ignored) {}
                     isShowingTimeOverlay = false;
-                }, 5500);
+                }, 7000);
             } catch (Exception e) {
                 Log.e(TAG, "showTimeOverlay error: " + e.getMessage());
                 isShowingTimeOverlay = false;
