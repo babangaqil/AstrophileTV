@@ -326,7 +326,7 @@ public class OverlayService extends Service {
         // ── Auto-trigger 5 menit: deteksi dari timer TV sendiri ──
         if (secs <= 300 && secs >= 299 && !sessionManager.isToast5Shown()) {
             sessionManager.setToast5Shown(true);
-            showTimeOverlay(); // tampil overlay + TTS "tinggal lima menit"
+            showTimeOverlay(true); // tampil overlay + TTS otomatis dari timer
         }
 
         // ── Auto-trigger 1 menit ──────────────────────────────
@@ -489,9 +489,13 @@ public class OverlayService extends Service {
     // =========================================================
 
     private void showTimeOverlay() {
+        showTimeOverlay(false); // default: tanpa TTS (manual dari kasir)
+    }
+
+    private void showTimeOverlay(boolean withTts) {
         if (isShowingTimeOverlay) return;
         isShowingTimeOverlay = true;
-        speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
+        if (withTts) speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
         final String  modeVal   = sessionManager.getMode() != null ? sessionManager.getMode() : "countdown";
         final boolean isPaused  = sessionManager.isPaused();
         final long    totalSec  = sessionManager.getDuration();
