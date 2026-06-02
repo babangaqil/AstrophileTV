@@ -28,7 +28,7 @@ public class SessionManager {
 
     // ── Listener ─────────────────────────────────────────────
     public interface SessionListener {
-        void onSessionStarted(boolean isNewSession);
+        void onSessionStarted(boolean isNewSession, boolean durationChanged);
         void onSessionExpired();
         void onSessionReset();
     }
@@ -72,7 +72,9 @@ public class SessionManager {
         }
 
         // Deteksi apakah ini sesi baru (start berubah = pelanggan baru)
-        boolean isNewSession = (fbStart != this.startTime && fbStart > 0);
+        boolean isNewSession    = (fbStart != this.startTime && fbStart > 0);
+        // Deteksi duration bertambah (tambah waktu / bonus waktu dari kasir)
+        boolean durationChanged = (fbDuration != this.duration && !isNewSession && this.active);
 
         if (isNewSession) {
             // Reset toast flags agar peringatan muncul lagi untuk pelanggan baru
@@ -90,13 +92,13 @@ public class SessionManager {
 
         Log.d(TAG, "applyFromLocal active=" + active + " mode=" + mode
                 + " start=" + startTime + " dur=" + duration
-                + " isNew=" + isNewSession);
+                + " isNew=" + isNewSession + " durChanged=" + durationChanged);
 
         if (active && startTime > 0 && listener != null) {
             if (fbExpired) {
                 listener.onSessionExpired();
             } else {
-                listener.onSessionStarted(isNewSession);
+                listener.onSessionStarted(isNewSession, durationChanged);
             }
         }
     }
