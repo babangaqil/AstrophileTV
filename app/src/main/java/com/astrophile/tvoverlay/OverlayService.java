@@ -395,7 +395,7 @@ public class OverlayService extends Service {
                     case "ping":      /* hanya trigger KASIR_HIT broadcast, tidak ada aksi lain */ break;
                     case "sleep":     showSleep();    break;
                     case "wake":      hideSleep();    break;
-                    case "showtime":  showTimeOverlay(); break;
+                    case "showtime":  sessionManager.setToast5Shown(true); showTimeOverlay(); break;
                     case "showbayar":
                         String bs = p.optString("bayarStatusOverlay", "");
                         if (bs.isEmpty()) bs = p.optString("bayarStatus", currentBayarStatus);
