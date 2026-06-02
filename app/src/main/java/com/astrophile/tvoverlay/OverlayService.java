@@ -155,7 +155,7 @@ public class OverlayService extends Service {
         audioManager   = new AstroAudioManager();
 
         sessionManager.setListener(new SessionManager.SessionListener() {
-            @Override public void onSessionStarted(boolean isNewSession) {
+            @Override public void onSessionStarted(boolean isNewSession, boolean durationChanged) {
                 mainHandler.post(() -> {
                     if (sessionManager.isExpired()) return;
 
@@ -179,9 +179,14 @@ public class OverlayService extends Service {
 
                         // Wake TV kalau lagi sleep
                         if (sleepView != null) hideSleep();
+                    } else if (durationChanged) {
+                        // ── Tambah waktu / bonus waktu dari kasir ─────────
+                        // Restart countdown agar sisa waktu dihitung ulang
+                        stopWidgetCountDown();
+                        Log.d(TAG, "durationChanged — restart widgetCountDown");
                     }
 
-                    // Update widget (sesi baru maupun Firebase sync)
+                    // Update widget (sesi baru, duration berubah, maupun sync biasa)
                     if (sessionManager.getStartTime() > 0) updateWidget();
                 });
             }
@@ -313,9 +318,8 @@ public class OverlayService extends Service {
             speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
         }
 
-        if (widgetCountDown == null) {
-            startWidgetCountDown(secs * 1000L);
-        }
+        // Selalu restart countdown agar sisa waktu akurat setelah tambah/bonus waktu
+        startWidgetCountDown(secs * 1000L);
     }
 
     // =========================================================
