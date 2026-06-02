@@ -184,6 +184,16 @@ public class OverlayService extends Service {
                         // Restart countdown agar sisa waktu dihitung ulang
                         stopWidgetCountDown();
                         Log.d(TAG, "durationChanged — restart widgetCountDown");
+                        // Kalau setelah tambah waktu sisa > 5 menit lagi,
+                        // reset flag agar overlay 5 menit bisa muncul kembali
+                        if (sessionManager.getRemainingSeconds() > 300) {
+                            sessionManager.setToast5Shown(false);
+                            isShowingTimeOverlay = false;
+                        }
+                        // Reset toast 1 menit juga kalau sisa > 1 menit
+                        if (sessionManager.getRemainingSeconds() > 60) {
+                            sessionManager.setToast1Shown(false);
+                        }
                     }
 
                     // Update widget (sesi baru, duration berubah, maupun sync biasa)
@@ -313,6 +323,13 @@ public class OverlayService extends Service {
             return;
         }
 
+        // ── Auto-trigger 5 menit: deteksi dari timer TV sendiri ──
+        if (secs <= 300 && secs >= 299 && !sessionManager.isToast5Shown()) {
+            sessionManager.setToast5Shown(true);
+            showTimeOverlay(); // tampil overlay + TTS "tinggal lima menit"
+        }
+
+        // ── Auto-trigger 1 menit ──────────────────────────────
         if (secs <= 60 && secs >= 59 && !sessionManager.isToast1Shown()) {
             sessionManager.setToast1Shown(true);
             speakWarning("Perhatian! Waktu bermain tinggal satu menit. Segera hubungi operator.");
