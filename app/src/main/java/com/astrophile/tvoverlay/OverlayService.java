@@ -493,7 +493,23 @@ public class OverlayService extends Service {
     }
 
     private void showTimeOverlay(boolean withTts) {
-        if (isShowingTimeOverlay) return;
+        // Kalau overlay sedang tampil, force dismiss dulu lalu tampil ulang
+        // (jangan return langsung — kasir bisa butuh refresh overlay)
+        if (isShowingTimeOverlay) {
+            mainHandler.post(() -> {
+                try {
+                    if (timeOverlayWv != null) {
+                        windowManager.removeView(timeOverlayWv);
+                        timeOverlayWv.destroy();
+                        timeOverlayWv = null;
+                    }
+                } catch (Exception ignored) {}
+                isShowingTimeOverlay = false;
+            });
+            // Delay sedikit lalu tampil ulang
+            mainHandler.postDelayed(() -> showTimeOverlay(withTts), 100);
+            return;
+        }
         isShowingTimeOverlay = true;
         if (withTts) speakWarning("Perhatian! Waktu bermain tinggal lima menit.");
         final String  modeVal   = sessionManager.getMode() != null ? sessionManager.getMode() : "countdown";
@@ -512,7 +528,7 @@ public class OverlayService extends Service {
                     try { timeOverlayWv.destroy(); } catch (Exception ignored) {}
                     timeOverlayWv = null;
                 }
-                try { Thread.sleep(50); } catch (Exception ignored) {}
+                // Thread.sleep(50) dihapus — blok UI thread, sudah digantikan removeView di atas
                 WindowManager.LayoutParams p = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.WRAP_CONTENT,
