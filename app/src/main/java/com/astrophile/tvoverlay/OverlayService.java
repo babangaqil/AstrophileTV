@@ -181,6 +181,14 @@ public class OverlayService extends Service {
                         if (sleepView != null) hideSleep();
                     } else if (durationChanged) {
                         // ── Tambah waktu / bonus waktu dari kasir ─────────
+                        // PENTING: kalau sebelumnya sesi ini WAKTU HABIS,
+                        // overlay fullscreen + alarm HARUS ditutup di sini juga —
+                        // sebelumnya cuma widget kecil yang di-restart, overlay
+                        // fullscreen & alarm tetap nyala nutupin layar TV.
+                        webViewManager.destroyExpiredOverlay();
+                        audioManager.stopAlarm();
+                        if (expiredView != null) expiredView.setVisibility(View.GONE);
+
                         // Restart countdown agar sisa waktu dihitung ulang
                         stopWidgetCountDown();
                         Log.d(TAG, "durationChanged — restart widgetCountDown");
