@@ -1,255 +1,293 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Layar Setup — 1 halaman, tanpa scroll, 2 kolom (landscape).
+  Kiri : branding + status.   Kanan : form + tombol.
+  Ukuran diambil dari values/dimens.xml (kompak) dan values-sw480dp/dimens.xml (TV).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:baselineAligned="false"
     android:background="#030508"
-    android:fillViewport="true">
+    android:paddingStart="@dimen/setup_pad_h"
+    android:paddingEnd="@dimen/setup_pad_h"
+    android:paddingTop="@dimen/setup_pad_v"
+    android:paddingBottom="@dimen/setup_pad_v">
 
+    <!-- ══════════ KOLOM KIRI: BRANDING + STATUS ══════════ -->
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="5"
+        android:layout_marginEnd="@dimen/setup_col_gap"
         android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:paddingStart="32dp"
-        android:paddingEnd="32dp"
-        android:paddingTop="48dp"
-        android:paddingBottom="40dp">
+        android:gravity="center">
 
-        <!-- ── HEADER ── -->
         <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/setup_title_h"
             android:text="ASTROPHILE"
-            android:textSize="34sp"
+            android:gravity="center"
+            android:maxLines="1"
             android:textStyle="bold"
             android:textColor="#00f5ff"
-            android:letterSpacing="0.3"
-            android:layout_marginBottom="4dp"/>
+            android:letterSpacing="0.22"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="14sp"
+            app:autoSizeMaxTextSize="@dimen/setup_title_sp"
+            app:autoSizeStepGranularity="1sp"/>
 
         <View
             android:layout_width="48dp"
             android:layout_height="2dp"
-            android:background="#1A00f5ff"
-            android:layout_marginBottom="6dp"/>
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="6dp"
+            android:background="#5500f5ff"/>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="TV MONITOR · SETUP"
-            android:textSize="10sp"
-            android:textColor="#2a5070"
-            android:letterSpacing="0.4"
-            android:layout_marginBottom="36dp"/>
+            android:text="TV MONITOR  ·  SETUP"
+            android:textSize="@dimen/setup_sub_sp"
+            android:textColor="#3a6d95"
+            android:letterSpacing="0.3"/>
 
-        <!-- ── INPUT CARD ── -->
+        <!-- Kartu status -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/setup_gap_big"
             android:orientation="vertical"
+            android:gravity="center"
             android:background="@drawable/card_bg"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
-            android:paddingTop="24dp"
-            android:paddingBottom="24dp"
-            android:layout_marginBottom="16dp">
+            android:paddingStart="@dimen/setup_card_pad"
+            android:paddingEnd="@dimen/setup_card_pad"
+            android:paddingTop="@dimen/setup_gap"
+            android:paddingBottom="@dimen/setup_gap">
 
-            <!-- Nomor TV & Nama TV -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="20dp">
-
-                <!-- Nomor TV -->
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginEnd="10dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="NOMOR TV"
-                        android:textSize="9sp"
-                        android:textColor="#3a6090"
-                        android:letterSpacing="0.2"
-                        android:layout_marginBottom="8dp"/>
-
-                    <EditText
-                        android:id="@+id/etTvNum"
-                        android:layout_width="match_parent"
-                        android:layout_height="52dp"
-                        android:hint="1"
-                        android:textColorHint="#2a4060"
-                        android:textColor="#e8f4ff"
-                        android:textSize="20sp"
-                        android:textStyle="bold"
-                        android:background="@drawable/input_bg"
-                        android:paddingStart="14dp"
-                        android:paddingEnd="14dp"
-                        android:gravity="center"
-                        android:inputType="number"
-                        android:singleLine="true"/>
-                </LinearLayout>
-
-                <!-- Nama TV -->
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="2"
-                    android:orientation="vertical"
-                    android:layout_marginStart="10dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="NAMA TV"
-                        android:textSize="9sp"
-                        android:textColor="#3a6090"
-                        android:letterSpacing="0.2"
-                        android:layout_marginBottom="8dp"/>
-
-                    <EditText
-                        android:id="@+id/etTvName"
-                        android:layout_width="match_parent"
-                        android:layout_height="52dp"
-                        android:hint="TV 1"
-                        android:textColorHint="#2a4060"
-                        android:textColor="#e8f4ff"
-                        android:textSize="14sp"
-                        android:background="@drawable/input_bg"
-                        android:paddingStart="14dp"
-                        android:paddingEnd="14dp"
-                        android:gravity="center"
-                        android:inputType="text"
-                        android:singleLine="true"/>
-                </LinearLayout>
-            </LinearLayout>
-
-            <!-- Nama Toko -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="NAMA TOKO"
-                android:textSize="9sp"
-                android:textColor="#3a6090"
-                android:letterSpacing="0.2"
-                android:layout_marginBottom="8dp"/>
-
-            <EditText
-                android:id="@+id/etNamaToko"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:hint="ASTROPHILE"
-                android:textColorHint="#2a4060"
-                android:textColor="#e8f4ff"
-                android:textSize="14sp"
-                android:background="@drawable/input_bg"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:gravity="center"
-                android:inputType="textCapCharacters"
-                android:singleLine="true"
-                android:layout_marginBottom="24dp"/>
-
-            <!-- Connect Button -->
-            <Button
-                android:id="@+id/btnConnect"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:text="⚡  HUBUNGKAN &amp; MULAI MONITOR"
-                android:textColor="#00f5ff"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.1"
-                android:background="@drawable/btn_connect_bg"/>
-
-        </LinearLayout>
-
-        <!-- ── STATUS CARD ── -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/card_bg"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
-            android:paddingTop="16dp"
-            android:paddingBottom="16dp"
-            android:layout_marginBottom="24dp">
-
-            <!-- IP LAN -->
-            <TextView
-                android:id="@+id/tvIpInfo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:textColor="#00ff88"
-                android:gravity="center"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone"/>
-
-            <!-- Status -->
             <TextView
                 android:id="@+id/tvStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="○  Monitor Tidak Aktif"
-                android:textSize="13sp"
+                android:textSize="@dimen/setup_status_sp"
+                android:textStyle="bold"
                 android:textColor="#ffcc00"
                 android:gravity="center"
-                android:layout_marginBottom="4dp"/>
+                android:maxLines="2"/>
 
-            <!-- Versi -->
+            <TextView
+                android:id="@+id/tvIpInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textSize="@dimen/setup_info_sp"
+                android:textColor="#00ff88"
+                android:gravity="center"
+                android:maxLines="2"
+                android:visibility="gone"/>
+
             <TextView
                 android:id="@+id/tvDeviceInfo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="10sp"
-                android:textColor="#2a4a6a"
+                android:layout_marginTop="2dp"
+                android:textSize="@dimen/setup_foot_sp"
+                android:textColor="#3a5f80"
                 android:gravity="center"
                 android:visibility="gone"/>
-
         </LinearLayout>
 
-        <!-- ── ACTION BUTTONS ── -->
-
-        <!-- Download Update -->
-        <Button
-            android:id="@+id/btnDownloadUpdate"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:text="⬇  DOWNLOAD UPDATE TERBARU"
-            android:textColor="#00f5ff"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.1"
-            android:backgroundTint="#071525"
-            android:layout_marginBottom="10dp"/>
-
-        <!-- Force Stop -->
-        <Button
-            android:id="@+id/btnForceStop"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:text="⏹  PAKSA BERHENTI"
-            android:textColor="#ff4d6d"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.1"
-            android:backgroundTint="#120508"
-            android:layout_marginBottom="28dp"/>
-
-        <!-- Footer -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/setup_gap"
             android:text="Mode LAN  ·  Config tersimpan otomatis"
-            android:textSize="9sp"
-            android:textColor="#1a3050"
+            android:textSize="@dimen/setup_foot_sp"
+            android:textColor="#2a4a6a"
+            android:letterSpacing="0.1"
+            android:gravity="center"/>
+    </LinearLayout>
+
+    <!-- ══════════ KOLOM KANAN: FORM + TOMBOL ══════════ -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="6"
+        android:orientation="vertical"
+        android:background="@drawable/card_bg"
+        android:padding="@dimen/setup_card_pad">
+
+        <!-- Nomor TV + Nama TV -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="@dimen/setup_gap"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="NOMOR TV"
+                    android:textSize="@dimen/setup_label_sp"
+                    android:textColor="#4a7fb0"
+                    android:letterSpacing="0.15"
+                    android:layout_marginBottom="4dp"/>
+
+                <EditText
+                    android:id="@+id/etTvNum"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/setup_input_h"
+                    android:minHeight="0dp"
+                    android:hint="1"
+                    android:textColorHint="#2a4060"
+                    android:textColor="#e8f4ff"
+                    android:textSize="@dimen/setup_input_num_sp"
+                    android:textStyle="bold"
+                    android:background="@drawable/setup_input_bg"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:gravity="center"
+                    android:inputType="number"
+                    android:imeOptions="actionNext"
+                    android:selectAllOnFocus="true"
+                    android:importantForAutofill="no"
+                    android:singleLine="true"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="NAMA TV"
+                    android:textSize="@dimen/setup_label_sp"
+                    android:textColor="#4a7fb0"
+                    android:letterSpacing="0.15"
+                    android:layout_marginBottom="4dp"/>
+
+                <EditText
+                    android:id="@+id/etTvName"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/setup_input_h"
+                    android:minHeight="0dp"
+                    android:hint="TV 1"
+                    android:textColorHint="#2a4060"
+                    android:textColor="#e8f4ff"
+                    android:textSize="@dimen/setup_input_sp"
+                    android:background="@drawable/setup_input_bg"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:gravity="center"
+                    android:inputType="text"
+                    android:imeOptions="actionNext"
+                    android:selectAllOnFocus="true"
+                    android:importantForAutofill="no"
+                    android:singleLine="true"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Nama Toko -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/setup_gap"
+            android:layout_marginBottom="4dp"
+            android:text="NAMA TOKO"
+            android:textSize="@dimen/setup_label_sp"
+            android:textColor="#4a7fb0"
             android:letterSpacing="0.15"/>
 
+        <EditText
+            android:id="@+id/etNamaToko"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/setup_input_h"
+            android:minHeight="0dp"
+            android:hint="ASTROPHILE"
+            android:textColorHint="#2a4060"
+            android:textColor="#e8f4ff"
+            android:textSize="@dimen/setup_input_sp"
+            android:background="@drawable/setup_input_bg"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:gravity="center"
+            android:inputType="textCapCharacters"
+            android:imeOptions="actionDone"
+            android:selectAllOnFocus="true"
+            android:importantForAutofill="no"
+            android:singleLine="true"/>
+
+        <!-- Tombol utama -->
+        <Button
+            android:id="@+id/btnConnect"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/setup_btn_h"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:layout_marginTop="@dimen/setup_gap_big"
+            android:text="HUBUNGKAN &amp; MULAI MONITOR"
+            android:textColor="#00f5ff"
+            android:textSize="@dimen/setup_btn_sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:maxLines="1"
+            android:stateListAnimator="@null"
+            android:background="@drawable/setup_btn_primary"/>
+
+        <!-- Tombol sekunder -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/setup_gap"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <Button
+                android:id="@+id/btnDownloadUpdate"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/setup_btn2_h"
+                android:layout_weight="1"
+                android:layout_marginEnd="@dimen/setup_gap"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="DOWNLOAD UPDATE"
+                android:textColor="#7fd8e8"
+                android:textSize="@dimen/setup_btn2_sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:maxLines="1"
+                android:stateListAnimator="@null"
+                android:background="@drawable/setup_btn_secondary"/>
+
+            <Button
+                android:id="@+id/btnForceStop"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/setup_btn2_h"
+                android:layout_weight="1"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="PAKSA BERHENTI"
+                android:textColor="#ff6b86"
+                android:textSize="@dimen/setup_btn2_sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:maxLines="1"
+                android:stateListAnimator="@null"
+                android:background="@drawable/setup_btn_secondary"/>
+        </LinearLayout>
     </LinearLayout>
-</ScrollView>
+</LinearLayout>
