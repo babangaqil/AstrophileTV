@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Overlay pesan dari kasir (tampil di tengah layar TV) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:background="@drawable/message_bg"
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="PESAN DARI KASIR"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:textColor="#00f5ff"
+        android:letterSpacing="0.25"/>
+
+    <View
+        android:layout_width="44dp"
+        android:layout_height="2dp"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="12dp"
+        android:background="#5500f5ff"/>
+
+    <TextView
+        android:id="@+id/tvMessageText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="Pesan"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#ffffff"
+        android:lineSpacingMultiplier="1.1"
+        android:maxLines="6"/>
+</LinearLayout>
