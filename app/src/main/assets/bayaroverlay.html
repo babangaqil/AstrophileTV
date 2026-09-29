@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+<!-- 100% LOKAL: tanpa internet. Status bayar datang dari Java lewat parameter URL (?bayarStatus=). -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{
@@ -21,7 +22,7 @@ body{
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
 .icon{font-size:11px;line-height:1;}
 .status{
-  font-family:'Orbitron',monospace;
+  font-family:'sans-serif-black','Roboto',sans-serif;
   font-size:10px;font-weight:700;
   letter-spacing:1px;line-height:1;
 }
@@ -34,8 +35,6 @@ body{
   <span class="icon" id="icon">✅</span>
   <span class="status sudah" id="status">SUDAH BAYAR</span>
 </div>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
 function getParam(name){
   var url=window.location.href,idx=url.indexOf('?');
@@ -57,42 +56,6 @@ function updateStatus(s){
 
 // Tampilkan status awal dari URL param
 updateStatus(getParam('bayarStatus')||'belum');
-
-// Dipanggil dari Java (OverlayService) setelah page load
-// untuk inject Firebase config dan mulai listener realtime
-function initFirebaseSync(apiKey, dbUrl, projectId, tvNum, initStatus){
-  try {
-    if(!apiKey || !dbUrl) return;
-
-    // Init Firebase jika belum
-    var app;
-    try {
-      app = firebase.app('bayar_overlay');
-    } catch(e) {
-      app = firebase.initializeApp({
-        apiKey: apiKey,
-        databaseURL: dbUrl,
-        projectId: projectId,
-        appId: '1:789474619442:android:5f678d3b6ebdc99a1c8c2b'
-      }, 'bayar_overlay');
-    }
-
-    var db = firebase.database(app);
-    var ref = db.ref('settings/activeSessions/' + tvNum + '/bayarStatus');
-
-    // Set status awal
-    updateStatus(initStatus || 'belum');
-
-    // Listener realtime — langsung update badge saat kasir ubah status
-    ref.on('value', function(snap){
-      var status = (snap.exists() && snap.val()) ? snap.val() : 'belum';
-      updateStatus(status);
-    });
-
-  } catch(err) {
-    console.error('initFirebaseSync error:', err);
-  }
-}
 </script>
 </body>
 </html>
