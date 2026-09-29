@@ -38,6 +38,11 @@ public class WebViewManager {
     private boolean expiredAttached     = false;
     private boolean bayarAttached       = false;
 
+    // Expired overlay: preload state (WebView disiapkan sebelum waktu habis)
+    private boolean  expiredReady    = false;   // halaman selesai dimuat
+    private Runnable expiredPending  = null;    // aksi "tampilkan" yang menunggu halaman siap
+    private Runnable expiredInjector = null;    // isi data sesi ke halaman
+
     public WebViewManager(Context ctx, WindowManager wm) {
         this.ctx         = ctx;
         this.wm          = wm;
@@ -146,11 +151,78 @@ public class WebViewManager {
     public void destroyExpiredOverlay() {
         detachExpiredOverlay();
         fullyDestroyWebView(expiredWv, "expiredOverlay");
-        expiredWv = null;
+        expiredWv       = null;
+        expiredReady    = false;
+        expiredPending  = null;
+        expiredInjector = null;
     }
 
     public WebView getExpiredOverlay() { return expiredWv; }
     public boolean isExpiredAttached() { return expiredAttached; }
+
+    /**
+     * Siapkan WebView expired lebih awal (belum ditampilkan / belum di-attach).
+     * Dipanggil beberapa saat sebelum waktu habis, supaya saat waktu habis
+     * overlay tinggal ditampilkan tanpa membuat WebView + load HTML dulu
+     * (penyebab lag di TV box spek rendah). Aman dipanggil berulang.
+     */
+    public void preloadExpiredOverlay(String htmlPath) {
+        if (expiredWv != null) return;
+        expiredReady   = false;
+        expiredPending = null;
+
+        expiredWv = buildExpiredWebView();
+        expiredWv.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                expiredReady = true;
+                Runnable pending = expiredPending;
+                expiredPending = null;
+                if (pending != null) {
+                    mainHandler.post(pending);
+                } else if (expiredAttached && expiredInjector != null) {
+                    mainHandler.post(expiredInjector);
+                }
+            }
+        });
+        expiredWv.loadUrl(htmlPath);
+        Log.d(TAG, "preloadExpiredOverlay OK");
+    }
+
+    /**
+     * Tampilkan overlay expired. Kalau sudah dipreload -> langsung tampil.
+     * Data sesi diisi SEBELUM di-attach, jadi tidak ada kedipan teks default.
+     * Kalau halaman belum siap, ditunggu (fallback 1.5 detik).
+     */
+    public void showExpiredOverlay(String htmlPath,
+                                   WindowManager.LayoutParams params,
+                                   Runnable injector) {
+        preloadExpiredOverlay(htmlPath); // no-op kalau sudah ada
+        expiredInjector = injector;
+
+        if (expiredAttached) {
+            expiredWv.setVisibility(android.view.View.VISIBLE);
+            if (injector != null) injector.run();
+            return;
+        }
+
+        final Runnable attach = () -> {
+            if (expiredWv == null || expiredAttached) return;
+            if (expiredInjector != null) expiredInjector.run();
+            attachExpiredOverlay(params);
+        };
+
+        if (expiredReady) {
+            attach.run();
+        } else {
+            expiredPending = attach;
+            mainHandler.postDelayed(() -> {
+                if (expiredPending == attach) {
+                    expiredPending = null;
+                    attach.run();
+                }
+            }, 1500);
+        }
+    }
 
     // ─────────────────────────────────────────────────────────
     // BAYAR WebView
@@ -248,6 +320,21 @@ public class WebViewManager {
         wv.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null);
         // Cegah layar putih saat loading — background transparan dulu
         wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        return wv;
+    }
+
+    /**
+     * WebView khusus overlay expired: 100% lokal.
+     * - blockNetworkLoads: tidak ada request internet sama sekali
+     * - background hitam solid (bukan transparan) -> tidak ada blending
+     *   dengan layar di belakangnya, lebih ringan di GPU TV box
+     */
+    private WebView buildExpiredWebView() {
+        WebView wv = buildHardenedWebView();
+        WebSettings s = wv.getSettings();
+        s.setBlockNetworkLoads(true);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        wv.setBackgroundColor(android.graphics.Color.BLACK);
         return wv;
     }
 

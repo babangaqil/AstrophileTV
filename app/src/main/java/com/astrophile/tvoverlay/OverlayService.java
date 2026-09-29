@@ -295,6 +295,11 @@ public class OverlayService extends Service {
 
     private void renderWidget(long secs) {
         if (widgetView == null) return;
+
+        // Siapkan overlay "waktu habis" lebih awal (2 menit sebelum habis),
+        // supaya saat habis tidak lag karena bikin WebView + load HTML.
+        if (secs > 0 && secs <= 120) webViewManager.preloadExpiredOverlay(EXPIRED_URL);
+
         TextView tvTime  = widgetView.findViewById(R.id.tvWidgetTime);
         TextView tvLabel = widgetView.findViewById(R.id.tvWidgetLabel);
         View     bgView  = widgetView.findViewById(R.id.widgetBg);
@@ -351,23 +356,21 @@ public class OverlayService extends Service {
     // EXPIRED OVERLAY
     // =========================================================
 
+    private static final String EXPIRED_URL = "file:///android_asset/expired.html";
+
     private void showExpiredOverlay() {
         Log.d(TAG, "showExpiredOverlay()");
         widgetView.setVisibility(View.GONE);
         toastView.setVisibility(View.GONE);
         expiredView.setVisibility(View.GONE);
 
-        webViewManager.getOrCreateExpiredOverlay(
-            "file:///android_asset/expired.html",
+        // WebView sudah dipreload sebelum waktu habis (lihat renderWidget) —
+        // di sini tinggal isi data lalu tampilkan.
+        webViewManager.showExpiredOverlay(
+            EXPIRED_URL,
+            makeWebOverlayParams(),
             () -> injectExpiredData(webViewManager.getExpiredOverlay())
         );
-
-        if (!webViewManager.isExpiredAttached()) {
-            webViewManager.attachExpiredOverlay(makeFullscreenParams(PixelFormat.OPAQUE));
-        } else {
-            android.webkit.WebView ev = webViewManager.getExpiredOverlay();
-            if (ev != null) ev.setVisibility(View.VISIBLE);
-        }
     }
 
     private void injectExpiredData(android.webkit.WebView view) {
@@ -472,6 +475,7 @@ public class OverlayService extends Service {
                 android.webkit.WebView wv = new android.webkit.WebView(getApplicationContext());
                 wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
                 wv.getSettings().setJavaScriptEnabled(true);
+                wv.getSettings().setBlockNetworkLoads(true); // 100% lokal, tanpa internet
                 wv.loadUrl("file:///android_asset/bayaroverlay.html?bayarStatus=" + currentBayarStatus);
                 bayarOverlayWv = wv;
                 try { windowManager.addView(bayarOverlayWv, p); } catch (Exception ignored) {}
@@ -552,6 +556,7 @@ public class OverlayService extends Service {
                 wv.setBackgroundColor(android.graphics.Color.TRANSPARENT);
                 wv.getSettings().setJavaScriptEnabled(true);
                 wv.getSettings().setDomStorageEnabled(true);
+                wv.getSettings().setBlockNetworkLoads(true); // 100% lokal, tanpa internet
                 String url = "file:///android_asset/timeoverlay.html"
                     + "?mode="     + android.net.Uri.encode(modeVal)
                     + "&tvNum="    + tvNum
@@ -722,6 +727,17 @@ public class OverlayService extends Service {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
             WindowManager.LayoutParams.FLAG_FULLSCREEN, fmt);
+    }
+
+    /**
+     * Params fullscreen untuk overlay berbasis WebView.
+     * FLAG_HARDWARE_ACCELERATED WAJIB untuk window non-Activity — tanpa flag ini
+     * WebView menggambar dengan software rendering (lag berat di TV box).
+     */
+    private WindowManager.LayoutParams makeWebOverlayParams() {
+        WindowManager.LayoutParams p = makeFullscreenParams(PixelFormat.OPAQUE);
+        p.flags |= WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
+        return p;
     }
 
     private void safeAddView(View v, WindowManager.LayoutParams p, String name) {
