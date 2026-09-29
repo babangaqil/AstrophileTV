@@ -74,7 +74,7 @@ public class SetupActivity extends AppCompatActivity {
         TextView tvIpInfo = findViewById(R.id.tvIpInfo);
         if (tvIpInfo != null) {
             String ip = OverlayService.getLocalIpAddress();
-            tvIpInfo.setText("📡 IP TV (LAN): " + ip + ":8080");
+            tvIpInfo.setText("IP TV (LAN): " + ip + ":8080");
             tvIpInfo.setVisibility(View.VISIBLE);
         }
 
