@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kolom input: border cyan tebal saat difokus (penting untuk remote D-pad TV) -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#1400f5ff"/>
+            <stroke android:width="2dp" android:color="#00f5ff"/>
+            <corners android:radius="12dp"/>
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0A00f5ff"/>
+            <stroke android:width="1dp" android:color="#2E00f5ff"/>
+            <corners android:radius="12dp"/>
+        </shape>
+    </item>
+</selector>
