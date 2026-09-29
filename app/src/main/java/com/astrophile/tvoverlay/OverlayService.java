@@ -49,6 +49,8 @@ public class OverlayService extends Service {
     private WindowManager.LayoutParams widgetParams;
     private View expiredView;
     private View toastView;
+    private View messageView;                 // overlay pesan dari kasir
+    private Runnable messageHideRunnable;
 
     // System services
     private WindowManager         windowManager;
@@ -133,6 +135,7 @@ public class OverlayService extends Service {
         safeRemoveView(toastView,   "toastView");
         safeRemoveView(expiredView, "expiredView");
         safeRemoveView(sleepView,   "sleepView");
+        hideMessageOverlayNow();
     }
 
     @Override
@@ -413,6 +416,14 @@ public class OverlayService extends Service {
                         showBayarOverlay(bs.isEmpty() ? "belum" : bs);
                         break;
                     case "hidebayar": hideBayarOverlay(); break;
+                    case "pesan":
+                        showMessageOverlay(
+                            p.optString("text", ""),
+                            p.optInt("durasi", 15),
+                            p.optBoolean("suara", false),
+                            p.optString("ukuran", "m"));
+                        break;
+                    case "hidepesan": hideMessageOverlay(); break;
                     default: Log.w(TAG, "unknown _cmd=" + tvCmd);
                 }
                 return;
@@ -600,6 +611,78 @@ public class OverlayService extends Service {
     private void hideSleep() {
         safeRemoveView(sleepView, "sleepView");
         sleepView = null;
+    }
+
+    // =========================================================
+    // PESAN DARI KASIR (LAN)
+    // =========================================================
+
+    /** Tampilkan pesan di tengah layar TV selama durSec detik (5–60). */
+    private void showMessageOverlay(String text, int durSec, final boolean speak, String ukuran) {
+        String t = text == null ? "" : text.trim();
+        if (t.isEmpty()) return;
+        if (t.length() > 200) t = t.substring(0, 200);
+        final String msg = t;
+        final int dur = Math.max(5, Math.min(60, durSec <= 0 ? 15 : durSec));
+
+        // Ukuran dipilih kasir: s = kecil, m = sedang (default), l = besar
+        final float textScale, widthFrac;
+        if      ("s".equals(ukuran)) { textScale = 0.85f; widthFrac = 0.40f; }
+        else if ("l".equals(ukuran)) { textScale = 1.35f; widthFrac = 0.62f; }
+        else                         { textScale = 1.00f; widthFrac = 0.48f; }
+
+        mainHandler.post(() -> {
+            try {
+                hideMessageOverlayNow(); // ganti pesan sebelumnya (sinkron, supaya tidak menghapus pesan baru)
+
+                // View ditambahkan saat ini juga supaya berada PALING ATAS
+                // (di atas overlay expired / layar sleep yang ditambah lebih dulu).
+                messageView = LayoutInflater.from(this).inflate(R.layout.overlay_message, null);
+                TextView tv = messageView.findViewById(R.id.tvMessageText);
+                tv.setText(msg);
+                tv.setTextSize((msg.length() <= 40 ? 26 : (msg.length() <= 90 ? 22 : 18)) * textScale);
+
+                int w = (int) (getResources().getDisplayMetrics().widthPixels * widthFrac);
+                WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                    w, WindowManager.LayoutParams.WRAP_CONTENT,
+                    getOverlayType(),
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                    PixelFormat.TRANSLUCENT);
+                lp.gravity = Gravity.CENTER;
+
+                messageView.setAlpha(0f);
+                safeAddView(messageView, lp, "messageView");
+                messageView.animate().alpha(1f).setDuration(220).start();
+
+                messageHideRunnable = this::hideMessageOverlayNow;
+                mainHandler.postDelayed(messageHideRunnable, dur * 1000L);
+
+                if (speak) speakWarning("Pesan dari kasir. " + msg);
+                Log.d(TAG, "showMessageOverlay dur=" + dur + "s len=" + msg.length() + " ukuran=" + ukuran);
+            } catch (Exception e) {
+                Log.e(TAG, "showMessageOverlay: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /** Aman dipanggil dari thread mana pun. */
+    private void hideMessageOverlay() {
+        mainHandler.post(this::hideMessageOverlayNow);
+    }
+
+    /** Harus dipanggil di main thread (langsung, tanpa post). */
+    private void hideMessageOverlayNow() {
+        if (messageHideRunnable != null) {
+            mainHandler.removeCallbacks(messageHideRunnable);
+            messageHideRunnable = null;
+        }
+        if (messageView != null) {
+            safeRemoveView(messageView, "messageView");
+            messageView = null;
+        }
     }
 
     // =========================================================
